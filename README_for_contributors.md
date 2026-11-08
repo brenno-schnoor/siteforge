@@ -54,3 +54,7 @@ Inclua o navegador, sistema operacional, rota, passos para reproduzir, resultado
 ## Direção do projeto
 
 O objetivo é fazer o SiteForge parecer uma ferramenta visual profissional, não apenas um CRUD com um canvas. Contribuições devem buscar equilíbrio entre expressividade, clareza, acessibilidade e performance.
+
+## Como registrar meu nome no projeto?
+
+Adicione o seu nome e seu link do github em [Contributors.md](Contributors.md) por meio de uma nova branch com o seu nome.
