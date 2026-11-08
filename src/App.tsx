@@ -153,7 +153,7 @@ type McpServer = {
   scope: "workspace" | "local";
 };
 
-type ProjectPayload = { pages: Page[]; layers: Omit<Layer, "icon">[]; layersByPage?: Record<string, Omit<Layer, "icon">[]>; selectedColor: string; font: string };
+type ProjectPayload = { name?: string; pages: Page[]; layers: Omit<Layer, "icon">[]; layersByPage?: Record<string, Omit<Layer, "icon">[]>; selectedColor: string; font: string };
 
 type Page = {
   id: string;
@@ -508,6 +508,7 @@ function App() {
   const [routePath, setRoutePath] = useState(() => appPath() || "/editor");
   const [preview, setPreview] = useState(() => appPath() === "/preview");
   const [selectedColor, setSelectedColor] = useState("#b8ff3d");
+  const [projectName, setProjectName] = useState("");
   const [font, setFont] = useState("Space Grotesk");
   const [toast, setToast] = useState("");
   const [zoom, setZoom] = useState(82);
@@ -609,6 +610,7 @@ function App() {
           if (project?.layersByPage) setLayersByPage(hydrateLayersByPage(project.layersByPage as Record<string, Layer[]>));
           if (project?.selectedColor) setSelectedColor(project.selectedColor);
           if (project?.font) setFont(project.font);
+          if (typeof project?.name === "string") setProjectName(project.name);
         }
       } catch {
         // A sessão indisponível mantém o workspace bloqueado até o login real.
@@ -632,7 +634,7 @@ function App() {
   }, []);
 
   const saveProject = async (nextPayload?: ProjectPayload) => {
-    const payload = nextPayload ?? { pages, layers: serializableLayers(layers), layersByPage: serializeLayersByPage(layersByPage), selectedColor, font };
+    const payload = nextPayload ?? { name: projectName, pages, layers: serializableLayers(layers), layersByPage: serializeLayersByPage(layersByPage), selectedColor, font };
     const draftKey = authUser ? `siteforge-project:${authUser.id}` : "siteforge-project:anonymous";
     localStorage.setItem(draftKey, JSON.stringify(payload));
     if (!authUser) {
@@ -664,6 +666,8 @@ function App() {
       if (savedByPage) setLayersByPage(hydrateLayersByPage(savedByPage));
       if (value.selectedColor) setSelectedColor(value.selectedColor);
       if (value.font) setFont(value.font);
+      const savedName = (value as { name?: unknown }).name;
+      if (typeof savedName === "string") setProjectName(savedName);
     } catch {
       localStorage.removeItem(draftKey);
     }
@@ -1010,7 +1014,7 @@ function App() {
           <div className="brand-mark"><span>S</span><span>F</span></div>
           <div><div className="brand-name">siteforge<span>.</span></div><div className="brand-tag">visual web editor</div></div>
         </div>
-        <div className="project-meta"><span className="status-pulse" /> <strong>{editorCopy[language].untitled}</strong><span className="meta-divider" /> <span className="muted">{editorCopy[language].saved}</span></div>
+        <div className="project-meta"><span className="status-pulse" /> <input className="project-name-input" aria-label="Nome do projeto" value={projectName} placeholder={editorCopy[language].untitled} maxLength={80} onChange={(event) => setProjectName(event.target.value)} onBlur={() => { void saveProject(); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /><span className="meta-divider" /> <span className="muted">{editorCopy[language].saved}</span></div>
         <div className="top-actions">
           <button className="icon-button subtle" aria-label={editorCopy[language].undo} title={editorCopy[language].undo} onClick={undo} disabled={undoStack.length === 0}><Undo2 size={15} /></button>
           <button className="icon-button subtle" aria-label={editorCopy[language].redo} title={editorCopy[language].redo} onClick={redo} disabled={redoStack.length === 0}><Redo2 size={15} /></button>
