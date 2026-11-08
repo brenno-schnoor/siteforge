@@ -321,3 +321,8 @@ kbd { font-family: 'Space Grotesk'; border: 1px solid rgba(255,255,255,.12); bor
 .property-field { display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: #9da4a6; }
 .property-field input { background: #15171d; color: #eff2ec; border: 1px solid rgba(255, 255, 255, .12); border-radius: 5px; padding: 4px 6px; font-size: 11px; width: 100%; }
 .property-field input:disabled { opacity: .45; }
+
+/* Editor etapa 5: menu de templates. */
+.template-menu { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: flex; gap: 6px; padding: 8px; background: #15171d; border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; z-index: 30; }
+.template-menu button { font-size: 11px; padding: 6px 10px; border-radius: 6px; background: #1d2029; color: #d9dfd6; border: 1px solid rgba(255, 255, 255, .12); }
+.template-menu button:hover { border-color: var(--lime); color: var(--lime); }
