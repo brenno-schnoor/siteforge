@@ -55,6 +55,7 @@ import { appPath, url } from "./paths";
   X,
   Zap,
 } from "lucide-react";
+import { appPath, url } from "./paths";
 
 type Device = "desktop" | "tablet" | "mobile";
 type InspectorTab = "design" | "animate";
