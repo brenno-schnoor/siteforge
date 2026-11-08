@@ -144,6 +144,7 @@ type Layer = {
   scale?: number;
   glow?: boolean;
   intensity?: number;
+  trigger?: "move";
 };
 
 const starterPages: Page[] = [
