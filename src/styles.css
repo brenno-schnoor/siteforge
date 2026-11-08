@@ -316,3 +316,8 @@ kbd { font-family: 'Space Grotesk'; border: 1px solid rgba(255,255,255,.12); bor
 .artboard-shell.is-preview .edit-layer { cursor: default; }
 .edit-layer.is-preview { cursor: default; }
 .edit-layer.is-linked { cursor: pointer; }
+
+/* Editor etapa 4: campos de posição editáveis no inspetor. */
+.property-field { display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: #9da4a6; }
+.property-field input { background: #15171d; color: #eff2ec; border: 1px solid rgba(255, 255, 255, .12); border-radius: 5px; padding: 4px 6px; font-size: 11px; width: 100%; }
+.property-field input:disabled { opacity: .45; }
