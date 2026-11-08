@@ -455,3 +455,5 @@ select.site-lang { appearance: auto; }
 [data-theme="light"] .avatar-button:not(.signed-in) { background: #e7e1c6; color: #4f4829; }
 [data-theme="light"] .project-meta strong { color: #241f0c; }
 [data-theme="light"] .status-pulse, [data-theme="light"] .live-dot { box-shadow: 0 0 0 3px rgba(90,140,30,.18); }
+.translation-hint { font-size: 10px; line-height: 1.5; color: #9da4a6; margin: 0 0 10px; }
+[data-theme="light"] .translation-hint { color: #7a7150; }
