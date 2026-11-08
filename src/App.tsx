@@ -137,6 +137,10 @@ type Layer = {
   text?: string;
   linkPageId?: string;
   src?: string;
+  rotate?: number;
+  radius?: number;
+  opacity?: number;
+  follow?: boolean;
 };
 
 const starterPages: Page[] = [
@@ -172,6 +176,35 @@ function serializableLayers(layers: Layer[]) {
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+type Template = { id: string; name: string; build: () => Layer[] };
+
+function templateLayer(name: string, kind: LayerKind, icon: typeof Box, box: LayerBox, text?: string): Layer {
+  return { id: `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, name, kind, visible: true, locked: false, detail: name, icon, box, text };
+}
+
+const templates: Template[] = [
+  { id: "landing", name: "Landing", build: () => [
+    templateLayer("Hero section", "group", BoxSelect, { x: 0, y: 0, w: 100, h: 100 }),
+    templateLayer("3D object", "scene", Move3d, { x: 55, y: 12, w: 40, h: 70 }),
+    templateLayer("Headline", "text", Type, { x: 8, y: 20, w: 44, h: 30 }, "Seu título aqui"),
+    templateLayer("CTA button", "button", Square, { x: 8, y: 58, w: 18, h: 7 }, "Começar"),
+  ] },
+  { id: "portfolio", name: "Portfólio", build: () => [
+    templateLayer("Hero section", "group", BoxSelect, { x: 0, y: 0, w: 100, h: 100 }),
+    templateLayer("Headline", "text", Type, { x: 6, y: 8, w: 60, h: 14 }, "Meu trabalho"),
+    templateLayer("Image", "image", ImageIcon, { x: 6, y: 30, w: 28, h: 50 }),
+    templateLayer("Image", "image", ImageIcon, { x: 36, y: 30, w: 28, h: 50 }),
+    templateLayer("Image", "image", ImageIcon, { x: 66, y: 30, w: 28, h: 50 }),
+  ] },
+  { id: "product", name: "Produto", build: () => [
+    templateLayer("Hero section", "group", BoxSelect, { x: 0, y: 0, w: 100, h: 100 }),
+    templateLayer("Image", "image", ImageIcon, { x: 56, y: 12, w: 38, h: 72 }),
+    templateLayer("Headline", "text", Type, { x: 8, y: 22, w: 42, h: 18 }, "Nome do produto"),
+    templateLayer("Description", "text", Type, { x: 8, y: 42, w: 40, h: 14 }, "Descreva o que ele faz em uma frase."),
+    templateLayer("Buy button", "button", Square, { x: 8, y: 62, w: 18, h: 7 }, "Comprar"),
+  ] },
+];
 
 // Distância (em % da área) abaixo da qual a camada "gruda" numa guia.
 const SNAP_DISTANCE = 0.6;
@@ -412,6 +445,8 @@ function App() {
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
   const assetInputRef = useRef<HTMLInputElement>(null);
+  const [pointer, setPointer] = useState({ x: 50, y: 50 });
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
   const [activeInspector, setActiveInspector] = useState<InspectorTab>("design");
   const [activeSide, setActiveSide] = useState<"pages" | "layers">("pages");
@@ -549,6 +584,14 @@ function App() {
       localStorage.removeItem(draftKey);
     }
   }, [authLoading, authUser]);
+
+  const applyTemplate = (template: Template) => {
+    setLayers(() => template.build());
+    setTemplatesOpen(false);
+    setSelectedLayerId("");
+    setExtraSelected([]);
+    notify(`Template "${template.name}" aplicado nesta página`);
+  };
 
   const renamePage = (pageId: string, name: string) => {
     const clean = name.trim();
@@ -908,7 +951,7 @@ function App() {
 
         <aside className="sidebar left-sidebar">
           <div className="panel-heading"><div><span className="eyebrow">Project</span><h2>Structure</h2></div><button className="icon-button" onClick={() => setShowMenu((value) => !value)}><Menu size={16} /></button></div>
-          {showMenu && <div className="quick-menu"><button onClick={() => { void saveProject(); }}><Save size={14} /> Save project</button><button onClick={addPage}><Plus size={14} /> Add page</button><button onClick={openIntegrations}><Plug size={14} /> Integrations</button><button onClick={openMcp}><Plug size={14} /> MCP servers</button><button onClick={() => notify("Templates estarão disponíveis em breve")}><WandSparkles size={14} /> Browse templates</button></div>}
+          {showMenu && <div className="quick-menu"><button onClick={() => { void saveProject(); }}><Save size={14} /> Save project</button><button onClick={addPage}><Plus size={14} /> Add page</button><button onClick={openIntegrations}><Plug size={14} /> Integrations</button><button onClick={openMcp}><Plug size={14} /> MCP servers</button><button onClick={() => { setTemplatesOpen(true); setShowMenu(false); }}><WandSparkles size={14} /> Browse templates</button></div>}
           <div className="segmented-tabs"><button className={activeSide === "pages" ? "active" : ""} onClick={() => setActiveSide("pages")}><FileText size={13} /> Pages <span>{pages.length}</span></button><button className={activeSide === "layers" ? "active" : ""} onClick={() => setActiveSide("layers")}><Layers3 size={13} /> Layers</button></div>
           {activeSide === "pages" ? (
             <div className="sidebar-scroll page-list">
@@ -957,16 +1000,17 @@ function App() {
             </div>
             <div className={`artboard-shell device-${device}`} style={{ transform: `scale(${zoom / 100})` }}>
               <div className="artboard-grid" />
-              <div className="edit-surface" onPointerDown={() => { if (!preview && editingLayerId === null) { setSelectedLayerId(""); setExtraSelected([]); } }}>
+              <div className="edit-surface" onPointerDown={() => { if (!preview && editingLayerId === null) { setSelectedLayerId(""); setExtraSelected([]); } }} onPointerMove={(event) => { if (!preview) return; const rect = event.currentTarget.getBoundingClientRect(); setPointer({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 }); }}>
                 {layers.map((layer, index) => ({ layer, index })).reverse().map(({ layer, index }) => {
                   const box = boxOf(layer, index);
                   const selected = !preview && (layer.id === selectedLayerId || extraSelected.includes(layer.id));
                   const editing = editingLayerId === layer.id;
+                  const follow = preview && !!layer.follow;
                   return (
                     <div
                       key={layer.id}
                       className={`edit-layer edit-${layer.kind}${selected ? " is-selected" : ""}${layer.locked ? " is-locked" : ""}${preview ? " is-preview" : ""}${preview && layer.linkPageId ? " is-linked" : ""}`}
-                      style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, zIndex: layers.length - index, display: layer.visible ? undefined : "none" }}
+                      style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, zIndex: layers.length - index, display: layer.visible ? undefined : "none", opacity: (layer.opacity ?? 100) / 100, borderRadius: layer.radius ?? 0, transform: `rotate(${layer.rotate ?? 0}deg) translate(${follow ? (pointer.x - 50) * 0.12 : 0}%, ${follow ? (pointer.y - 50) * 0.12 : 0}%)` }}
                       onPointerDown={preview || editing ? undefined : (event) => beginLayerPointer(event, layer, index, "move")}
                       onDoubleClick={preview || layer.locked || (layer.kind !== "text" && layer.kind !== "button") ? undefined : () => setEditingLayerId(layer.id)}
                       onClick={preview && layer.linkPageId ? () => goToPage(layer.linkPageId as string) : undefined}
@@ -1017,16 +1061,23 @@ function App() {
             <div className="inspector-section"><div className="inspector-section-title">Layout <ChevronDown size={14} /></div><div className="property-grid">{(["x", "y", "w", "h"] as const).map((key) => (
                 <label key={key} className="property-field"><span>{key.toUpperCase()} %</span><input type="number" min={0} max={100} disabled={!chosenLayer || chosenLayer.locked} value={chosenLayer ? Math.round(boxOf(chosenLayer, layers.indexOf(chosenLayer))[key] * 10) / 10 : 0} onChange={(event) => { if (!chosenLayer) return; const box = boxOf(chosenLayer, layers.indexOf(chosenLayer)); updateLayer(chosenLayer.id, { box: { ...box, [key]: Number(event.target.value) } }); }} /></label>
               ))}</div><div className="property-line"><span>Position</span><div className="segmented-mini"><button className="active">Abs</button><button>Rel</button><button>Fix</button></div></div></div>
-            <div className="inspector-section"><div className="inspector-section-title">Transform <ChevronDown size={14} /></div><div className="property-grid"><Property label="Rotate" value="12°" icon={<Rotate3d size={12} />} /><Property label="Scale" value="1.0" /><Property label="Radius" value="24" /><Property label="Opacity" value="100%" /></div></div>
+            <div className="inspector-section"><div className="inspector-section-title">Transform <ChevronDown size={14} /></div><div className="property-grid">{([
+                { key: "rotate", label: "Rotate °", min: -180, max: 180, fallback: 0 },
+                { key: "radius", label: "Radius px", min: 0, max: 200, fallback: 0 },
+                { key: "opacity", label: "Opacity %", min: 0, max: 100, fallback: 100 },
+              ] as const).map((field) => (
+                <label key={field.key} className="property-field"><span>{field.label}</span><input type="number" min={field.min} max={field.max} disabled={!chosenLayer} value={chosenLayer?.[field.key] ?? field.fallback} onChange={(event) => { if (!chosenLayer) return; const value = Number(event.target.value); updateLayer(chosenLayer.id, field.key === "rotate" ? { rotate: value } : field.key === "radius" ? { radius: value } : { opacity: value }); }} /></label>
+              ))}</div></div>
             <div className="inspector-section"><div className="inspector-section-title">Appearance <ChevronDown size={14} /></div><div className="color-row"><span>Fill</span><button className="color-control" onClick={() => setSelectedColor(selectedColor === "#b8ff3d" ? "#8f9dff" : "#b8ff3d")}><span style={{ background: selectedColor }} />{selectedColor}<ChevronRight size={13} /></button></div><div className="color-row"><span>Gradient</span><button className="gradient-control"><span />linear · 135° <ChevronRight size={13} /></button></div><div className="swatch-row">{colorSwatches.map((color) => <button key={color} className={`swatch ${selectedColor === color ? "active" : ""}`} style={{ background: color }} onClick={() => setSelectedColor(color)} aria-label={`Selecionar cor ${color}`} />)}<button className="swatch-add"><Plus size={13} /></button></div></div>
             <div className="inspector-section"><div className="inspector-section-title">Typography <ChevronDown size={14} /></div><div className="select-field"><Type size={13} /><select value={font} onChange={(event) => setFont(event.target.value)}><option>Space Grotesk</option><option>DM Sans</option><option>Instrument Serif</option></select><ChevronDown size={13} /></div><div className="property-grid"><Property label="Weight" value="Medium" /><Property label="Size" value="64 px" /><Property label="Line" value="0.95" /><Property label="Track" value="-0.03em" /></div></div>
-            <div className="inspector-section"><div className="inspector-section-title">Effects <ChevronDown size={14} /></div><div className="effect-row"><div className="effect-icon"><Sparkles size={14} /></div><div><strong>Soft glow</strong><span>Screen · 22%</span></div><button className="toggle active"><span /></button></div><div className="effect-row"><div className="effect-icon dark"><Box size={14} /></div><div><strong>Noise texture</strong><span>Overlay · 12%</span></div><button className="toggle active"><span /></button></div></div>
-          </div> : <div className="inspector-scroll"><div className="animation-card"><div className="animation-icon"><MousePointer2 size={16} /></div><div><span className="eyebrow">Pointer interaction</span><h3>Follow cursor</h3><p>Object subtly leans toward the pointer position.</p></div><button className="toggle active"><span /></button></div><div className="inspector-section"><div className="inspector-section-title">Trigger <ChevronDown size={14} /></div><div className="select-field"><MousePointer2 size={13} /><select><option>On mouse move</option><option>On click</option><option>On page enter</option></select><ChevronDown size={13} /></div></div><div className="inspector-section"><div className="inspector-section-title">Motion curve <ChevronDown size={14} /></div><div className="curve-preview"><span /><span /><span /><span /><span /></div><div className="curve-labels"><span>Gentle</span><span>Spring</span></div></div><div className="inspector-section"><div className="inspector-section-title">Response <ChevronDown size={14} /></div><Property label="Intensity" value="32%" /><Property label="Duration" value="800 ms" /><Property label="Delay" value="0 ms" /></div></div>}
+            <div className="inspector-section"><div className="inspector-section-title">Effects <ChevronDown size={14} /></div><div className="effect-row"><div className="effect-icon"><Sparkles size={14} /></div><div><strong>Soft glow</strong><span>Screen · 22%</span></div><button className="toggle active"><span /></button></div><div className="effect-row"><div className="effect-icon dark"><Box size={14} /></div><div><strong>Noise texture</strong><span>Overlay · 12%</span></div><button className={`toggle ${layers.find((item) => item.id === "noise")?.visible !== false ? "active" : ""}`} onClick={() => { const noise = layers.find((item) => item.id === "noise"); if (noise) updateLayer(noise.id, { visible: !noise.visible }); }}><span /></button></div></div>
+          </div> : <div className="inspector-scroll"><div className="animation-card"><div className="animation-icon"><MousePointer2 size={16} /></div><div><span className="eyebrow">Pointer interaction</span><h3>Follow cursor</h3><p>Object subtly leans toward the pointer position.</p></div><button className={`toggle ${chosenLayer?.follow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { follow: !chosenLayer.follow }); }}><span /></button></div><div className="inspector-section"><div className="inspector-section-title">Trigger <ChevronDown size={14} /></div><div className="select-field"><MousePointer2 size={13} /><select><option>On mouse move</option><option>On click</option><option>On page enter</option></select><ChevronDown size={13} /></div></div><div className="inspector-section"><div className="inspector-section-title">Motion curve <ChevronDown size={14} /></div><div className="curve-preview"><span /><span /><span /><span /><span /></div><div className="curve-labels"><span>Gentle</span><span>Spring</span></div></div><div className="inspector-section"><div className="inspector-section-title">Response <ChevronDown size={14} /></div><Property label="Intensity" value="32%" /><Property label="Duration" value="800 ms" /><Property label="Delay" value="0 ms" /></div></div>}
           <div className="inspector-footer"><button className="delete-button" onClick={deleteSelectedLayer}><Trash2 size={14} /> Delete layer</button><span className="muted">{selectedLayer?.locked ? "Locked" : "Editable"}</span></div>
         </aside>
       </div>
 
-      {!preview && <div className="bottom-dock"><div className="dock-label"><span className="dock-icon"><Plus size={14} /></span><strong>Add to canvas</strong></div><button onClick={() => addLayer("text", "Text block", Type, "Space Grotesk · 24 px")}><Type size={14} /> Text</button><button onClick={() => addLayer("button", "Button", Square, "Button · secondary")}><Square size={14} /> Button</button><button onClick={() => addLayer("image", "Image", ImageIcon, "Image · crop fill")}><ImageIcon size={14} /> Image</button><button onClick={() => addLayer("group", "Container", Box, "Frame · auto layout")}><Box size={14} /> Container</button><button onClick={() => addLayer("scene", "3D object", Move3d, "Three.js · mesh")}><Move3d size={14} /> 3D object</button><span className="dock-spacer" /><button className="dock-more" onClick={() => notify("Mais blocos chegando na próxima versão")}><Plus size={14} /> More</button></div>}
+      {templatesOpen && !preview && <div className="template-menu">{templates.map((template) => <button key={template.id} onClick={() => applyTemplate(template)}>{template.name}</button>)}<button onClick={() => setTemplatesOpen(false)}>Fechar</button></div>}
+      {!preview && <div className="bottom-dock"><div className="dock-label"><span className="dock-icon"><Plus size={14} /></span><strong>Add to canvas</strong></div><button onClick={() => addLayer("text", "Text block", Type, "Space Grotesk · 24 px")}><Type size={14} /> Text</button><button onClick={() => addLayer("button", "Button", Square, "Button · secondary")}><Square size={14} /> Button</button><button onClick={() => addLayer("image", "Image", ImageIcon, "Image · crop fill")}><ImageIcon size={14} /> Image</button><button onClick={() => addLayer("group", "Container", Box, "Frame · auto layout")}><Box size={14} /> Container</button><button onClick={() => addLayer("scene", "3D object", Move3d, "Three.js · mesh")}><Move3d size={14} /> 3D object</button><span className="dock-spacer" /><button className="dock-more" onClick={() => setTemplatesOpen((open) => !open)}><Plus size={14} /> More</button></div>}
       {preview && <div className="preview-banner"><span><span className="live-dot" /> Preview mode</span><span>Move your cursor over the canvas to feel the scene respond.</span><button onClick={() => setPreview(false)}><X size={14} /> Exit preview</button></div>}
       {authOpen && <AuthModal user={authUser} onClose={() => setAuthOpen(false)} onLogin={beginLogin} onLogout={logout} />}
       {integrationsOpen && <IntegrationsModal integrations={integrations} onClose={() => setIntegrationsOpen(false)} onNotify={notify} />}
