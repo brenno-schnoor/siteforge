@@ -403,7 +403,7 @@ function App() {
           setAuthUser(user);
           const project = (await loadCloudProject()) as Partial<ProjectPayload> | null;
           if (project?.pages?.length) setPages(project.pages);
-          if (project?.layers?.length) setLayers(hydrateLayers(project.layers));
+          if (project?.layers?.length) setLayers(hydrateLayers(project.layers as Layer[]));
           if (project?.selectedColor) setSelectedColor(project.selectedColor);
           if (project?.font) setFont(project.font);
         }
