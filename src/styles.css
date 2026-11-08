@@ -326,3 +326,12 @@ kbd { font-family: 'Space Grotesk'; border: 1px solid rgba(255,255,255,.12); bor
 .template-menu { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); display: flex; gap: 6px; padding: 8px; background: #15171d; border: 1px solid rgba(255, 255, 255, .12); border-radius: 8px; z-index: 30; }
 .template-menu button { font-size: 11px; padding: 6px 10px; border-radius: 6px; background: #1d2029; color: #d9dfd6; border: 1px solid rgba(255, 255, 255, .12); }
 .template-menu button:hover { border-color: var(--lime); color: var(--lime); }
+
+/* Editor etapa 6: busca rápida (⌘K). */
+.palette-backdrop { position: fixed; inset: 0; background: rgba(5, 6, 9, .6); display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh; z-index: 90; }
+.palette { width: min(520px, 90vw); background: #15171d; border: 1px solid rgba(255, 255, 255, .12); border-radius: 10px; padding: 12px; }
+.palette input { width: 100%; background: #0e0f13; color: #eff2ec; border: 1px solid rgba(255, 255, 255, .12); border-radius: 6px; padding: 10px; font-size: 13px; }
+.palette-list { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; max-height: 50vh; overflow: auto; }
+.palette-list button { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px; border-radius: 6px; color: #d9dfd6; font-size: 12px; }
+.palette-list button:hover { background: #1d2029; }
+.palette-list span { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--lime); min-width: 56px; }
