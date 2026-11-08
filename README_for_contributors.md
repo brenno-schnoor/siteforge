@@ -13,7 +13,7 @@ Obrigado pelo interesse em contribuir com o SiteForge. Este projeto está em fas
 
 - **Editor:** novos elementos, propriedades, interações, atalhos e melhorias de acessibilidade.
 - **3D:** cenas Three.js, materiais, iluminação, animações e performance.
-- **Workspace:** projetos, persistência, navegação e estados de autenticação Manus.
+- **Workspace:** projetos, persistência, navegação e estados de autenticação Google.
 - **Interface pública:** páginas institucionais, responsividade, temas e traduções PT/EN/ES.
 - **MCP:** descoberta, configuração e apresentação de servidores Model Context Protocol.
 - **Qualidade:** testes, documentação, correções de bugs e redução de bundle.
@@ -24,7 +24,7 @@ Obrigado pelo interesse em contribuir com o SiteForge. Este projeto está em fas
 - Prefira componentes pequenos e estados explícitos a condicionais difíceis de rastrear.
 - Não adicione credenciais, tokens, cookies de sessão ou arquivos `.env` ao Git.
 - Não reintroduza planos pagos, Stripe, billing ou login Google Cloud sem uma decisão explícita dos mantenedores.
-- Mantenha o login Manus obrigatório para acessar o editor e respeite o isolamento dos projetos por usuário.
+- Mantenha o login com Google obrigatório para acessar o editor e respeite o isolamento dos projetos por usuário.
 - Ao alterar rotas, atualize `public/manus-routes.json`.
 - Ao alterar textos públicos, atualize os três idiomas quando aplicável.
 - Para mudanças grandes, explique a motivação e inclua capturas de tela ou um vídeo curto quando isso ajudar a revisar o comportamento visual.
