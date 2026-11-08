@@ -463,6 +463,7 @@ function App() {
   const [font, setFont] = useState("Space Grotesk");
   const [toast, setToast] = useState("");
   const [zoom, setZoom] = useState(82);
+  const [showGrid, setShowGrid] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("siteforge-theme") as Theme) || "dark");
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem("siteforge-language") as Language) || "pt");
@@ -709,7 +710,7 @@ function App() {
   };
 
   const addLayer = (kind: LayerKind, name: string, icon: typeof Box, detail: string) => {
-    const layer: Layer = { id: `${kind}-${Date.now()}`, name, kind, visible: true, locked: false, detail, icon };
+    const layer: Layer = { id: `${kind}-${Date.now()}`, name, kind, visible: true, locked: false, detail, icon, box: { x: 35, y: 38, w: 30, h: 20 } };
     setLayers((current) => [layer, ...current]);
     setSelectedLayerId(layer.id);
     notify(`${name} inserido no canvas`);
@@ -983,11 +984,11 @@ function App() {
 
         <section className="editor-stage">
           <div className="stage-toolbar">
-            <div className="toolbar-group"><button className="tool-button active"><MousePointer2 size={15} /> Select</button><button className="tool-button"><BoxSelect size={15} /> Frame</button><button className="tool-button"><Type size={15} /> Type</button><button className="tool-button"><ImageIcon size={15} /> Media</button><button className="tool-button"><Move3d size={15} /> 3D</button></div>
+            <div className="toolbar-group"><button className="tool-button active" title="Limpar seleção" onClick={() => { setSelectedLayerId(null); setExtraSelected([]); }}><MousePointer2 size={15} /> Select</button><button className="tool-button" title="Inserir frame" onClick={() => addLayer("group", "Frame", BoxSelect, "Frame · auto")}><BoxSelect size={15} /> Frame</button><button className="tool-button" title="Inserir texto" onClick={() => addLayer("text", "Texto", Type, "Texto · 32 px")}><Type size={15} /> Type</button><button className="tool-button" title="Inserir imagem" onClick={() => assetInputRef.current?.click()}><ImageIcon size={15} /> Media</button><button className="tool-button" title="Inserir objeto 3D" onClick={() => addLayer("scene", "Objeto 3D", Move3d, "Esfera · 3D")}><Move3d size={15} /> 3D</button></div>
             <div className="toolbar-center"><button className={`device-button ${device === "desktop" ? "active" : ""}`} onClick={() => setDevice("desktop")}><Maximize2 size={13} /> Desktop</button><button className={`device-button ${device === "tablet" ? "active" : ""}`} onClick={() => setDevice("tablet")}><Square size={12} /> Tablet</button><button className={`device-button ${device === "mobile" ? "active" : ""}`} onClick={() => setDevice("mobile")}><PanelLeft size={12} /> Mobile</button></div>
-            <div className="toolbar-group right"><button className="icon-button"><Search size={15} /></button><button className="icon-button"><Grid2X2 size={15} /></button><button className="zoom-button" onClick={() => setZoom((value) => value >= 100 ? 60 : value + 10)}>{zoom}% <ChevronDown size={13} /></button></div>
+            <div className="toolbar-group right"><button className="icon-button" aria-label="Buscar (⌘K)" title="Buscar (⌘K)" onClick={() => setPaletteOpen(true)}><Search size={15} /></button><button className={`icon-button ${showGrid ? "active" : ""}`} aria-label="Mostrar grade" title="Mostrar grade" onClick={() => setShowGrid((value) => !value)}><Grid2X2 size={15} /></button><button className="zoom-button" onClick={() => setZoom((value) => value >= 100 ? 60 : value + 10)}>{zoom}% <ChevronDown size={13} /></button></div>
           </div>
-          <div className="canvas-wrap">
+          <div className={`canvas-wrap ${showGrid ? "show-grid" : ""}`}>
             <div className="canvas-topline"><span><span className="canvas-dot" /> {activePage?.name} <span className="muted">/ {activePage?.path}</span></span><span className="canvas-coordinates">x: 0 · y: 0 <span className="muted">·</span> 1440 × 900</span></div>
             <div className="align-bar" role="toolbar" aria-label="Alinhar">
               <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("left")}>Esquerda</button>
