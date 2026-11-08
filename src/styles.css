@@ -281,3 +281,17 @@ kbd { font-family: 'Space Grotesk'; border: 1px solid rgba(255,255,255,.12); bor
 .project-new-icon { width: 42px; height: 42px; }.projects-account { padding: 4px 0; border-radius: 7px; }.projects-account:hover { color: #edf2ea; }
 [data-theme="light"] .projects-topbar { background: rgba(243,247,241,.78); border-color: rgba(20,30,24,.1); }
 @media (max-width: 760px) { .projects-topbar { padding: 0 20px; }.projects-content { padding: 54px 20px 80px; }.projects-heading h1 { font-size: 50px; } }
+
+/* Editor: camadas desenhadas a partir das posições salvas (porcentagem da área do canvas). */
+.edit-surface { position: absolute; inset: 0; z-index: 1; }
+.edit-layer { position: absolute; box-sizing: border-box; }
+.edit-layer:not(.is-locked) { cursor: move; }
+.edit-layer.is-locked { pointer-events: none; }
+.edit-layer.is-selected { outline: 1px solid rgba(184, 255, 61, .75); outline-offset: 2px; }
+.edit-handle { position: absolute; right: -6px; bottom: -6px; width: 10px; height: 10px; background: var(--lime); border: 1px solid #111; cursor: nwse-resize; }
+.edit-text { margin: 0; width: 100%; height: 100%; overflow: hidden; font: 500 clamp(38px, 4.1vw, 65px)/.92 'Space Grotesk'; letter-spacing: -.08em; color: #eff2ec; }
+.edit-image { width: 100%; height: 100%; background: linear-gradient(135deg, rgba(255, 255, 255, .06), transparent); pointer-events: none; }
+.edit-group { border: 1px dashed rgba(255, 255, 255, .12); }
+.edit-frame-label { position: absolute; left: 8px; top: 8px; font-size: 9px; color: #9da4a6; pointer-events: none; }
+.edit-button .art-cta { position: absolute; inset: 0; width: 100%; height: 100%; justify-content: center; }
+.edit-scene .scene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; top: auto; right: auto; }
