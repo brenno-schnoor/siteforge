@@ -70,7 +70,7 @@ public/
 
 O SiteForge é um protótipo funcional em evolução. A contribuição mais útil neste momento é melhorar a arquitetura do editor, adicionar componentes visuais reutilizáveis, ampliar a persistência de projetos, fortalecer testes e propor novas interações 3D sem perder a clareza da interface.
 
-Consulte [`contributors.md`](contributors.md) para orientações de colaboração.
+Consulte [`README_for_contributors.md`](README_for_contributors.md) para orientações de colaboração.
 
 ## Licença
 
