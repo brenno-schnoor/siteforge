@@ -17,7 +17,7 @@ O foco atual está em:
 - cenas 3D interativas com Three.js e resposta ao ponteiro;
 - preview desktop, tablet e mobile;
 - persistência de projetos por usuário;
-- autenticação oficial Manus para proteger o workspace;
+- login com Google para proteger o workspace;
 - gerenciamento de servidores MCP dentro do editor;
 - interface pública em português, inglês e espanhol;
 - tema claro e escuro.
@@ -28,7 +28,7 @@ O foco atual está em:
 - Three.js
 - Express 5
 - MySQL via `mysql2` quando `DATABASE_URL` está disponível
-- Manus OAuth e JWT para sessão
+- Google OAuth e JWT para sessão
 - Lucide React para ícones
 
 ## Execução local
@@ -45,7 +45,7 @@ npm run build
 npm run preview
 ```
 
-Variáveis usadas pelo login Manus e pela persistência podem ser configuradas no ambiente de execução. Não inclua segredos no repositório.
+Variáveis usadas pelo login com Google e pela persistência podem ser configuradas no ambiente de execução. Não inclua segredos no repositório.
 
 ## Estrutura principal
 
@@ -56,7 +56,7 @@ src/
   main.tsx         Roteamento por pathname
   styles.css       Sistema visual e responsividade
 server/
-  index.mjs        Runtime Express, Manus OAuth e API de projetos
+  index.mjs        Runtime Express, Google OAuth e API de projetos
   db.mjs           Schema e persistência de usuários/projetos
 public/
   manus-routes.json Manifesto de rotas do Preview

@@ -15,6 +15,7 @@ const port = Number(process.env.PORT || 3000);
 const app = express();
 app.set("trust proxy", true);
 
+const sessionAppId = "siteforge";
 const sessionCookieName = "webdev_app_session";
 const oauthStateCookieName = "siteforge_oauth_state";
 const pendingOAuthStates = new Map();
@@ -84,8 +85,8 @@ function isOAuthRedirect(redirectUri, req, pathname) {
 
 function sessionFromRequest(req) {
   const token = getCookies(req)[sessionCookieName];
-  const secret = process.env.MANUS_JWT_SECRET;
-  const appId = process.env.MANUS_PROJECT_ID;
+  const secret = process.env.SESSION_JWT_SECRET;
+  const appId = sessionAppId;
   if (!token || !secret || !appId) return null;
   try {
     const payload = jwt.verify(token, secret, { algorithms: ["HS256"] });
@@ -135,46 +136,52 @@ function normalizeProject(input) {
 app.get("/_app/health", (_req, res) => res.json({ ok: true, service: "siteforge", timestamp: new Date().toISOString() }));
 
 app.get("/api/auth/login", (req, res) => {
-  const portal = process.env.MANUS_OAUTH_PORTAL_URL;
-  const appId = process.env.MANUS_PROJECT_ID;
-  if (!portal || !appId) return res.status(503).send("Manus OAuth is not configured in this environment.");
-  const redirectUri = `${publicOrigin(req)}/manus-oauth/callback`;
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  if (!clientId) return res.status(503).send("Google login is not configured in this environment.");
+  const redirectUri = `${publicOrigin(req)}/auth/google/callback`;
   const nonce = crypto.randomBytes(24).toString("base64url");
   const state = encodeState({ redirectUri, nonce });
-  rememberOAuthState("manus", { redirectUri, nonce });
+  rememberOAuthState("google", { redirectUri, nonce });
   setCookie(res, oauthStateCookieName, encodeState({ nonce }), { maxAge: 600 });
-  const url = new URL(`${portal.replace(/\/$/, "")}/app-auth`);
-  url.searchParams.set("appId", appId);
-  url.searchParams.set("redirectUri", redirectUri);
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("state", state);
-  url.searchParams.set("responseType", "code");
+  url.searchParams.set("prompt", "select_account");
   res.redirect(url.toString());
 });
 
-app.get("/manus-oauth/callback", async (req, res) => {
+app.get("/auth/google/callback", async (req, res) => {
   const state = decodeState(String(req.query.state || ""));
   const code = String(req.query.code || "");
-  if (!isOAuthRedirect(state?.redirectUri, req, "/manus-oauth/callback") || !consumeOAuthState("manus", state, getCookies(req)[oauthStateCookieName]) || !code) return res.status(400).send("Authentication state expired. Please try again.");
+  if (!isOAuthRedirect(state?.redirectUri, req, "/auth/google/callback") || !consumeOAuthState("google", state, getCookies(req)[oauthStateCookieName]) || !code) return res.status(400).send("Authentication state expired. Please try again.");
   try {
-    const oauthApi = process.env.MANUS_OAUTH_API_URL;
-    const appId = process.env.MANUS_PROJECT_ID;
-    const exchange = await fetch(`${oauthApi}/webdev.v1.WebDevAuthPublicService/ExchangeToken`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ clientId: appId, grantType: "authorization_code", code, redirectUri: state.redirectUri }) });
-    if (!exchange.ok) throw new Error(`oauth_exchange_${exchange.status}`);
-    const exchangeData = await exchange.json();
-    const identityResponse = await fetch(`${oauthApi}/webdev.v1.WebDevAuthPublicService/GetUserInfo`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accessToken: exchangeData.accessToken }) });
-    if (!identityResponse.ok) throw new Error(`oauth_identity_${identityResponse.status}`);
-    const identity = await identityResponse.json();
-    if (!identity.openId) throw new Error("oauth_identity_missing_open_id");
-    const user = await findOrCreateUser({ openId: identity.openId, email: identity.email, name: identity.name });
-    const secret = process.env.MANUS_JWT_SECRET;
-    if (!secret) throw new Error("manus_jwt_secret_missing");
-    const token = jwt.sign({ appId, openId: user.openId, name: user.name }, secret, { algorithm: "HS256", expiresIn: "30d" });
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) throw new Error("google_oauth_not_configured");
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: state.redirectUri, grant_type: "authorization_code" })
+    });
+    if (!tokenResponse.ok) throw new Error(`google_token_${tokenResponse.status}`);
+    const tokens = await tokenResponse.json();
+    const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", { headers: { authorization: `Bearer ${tokens.access_token}` } });
+    if (!profileResponse.ok) throw new Error(`google_userinfo_${profileResponse.status}`);
+    const profile = await profileResponse.json();
+    if (!profile.sub) throw new Error("google_identity_missing_sub");
+    const user = await findOrCreateUser({ openId: `google:${profile.sub}`, email: profile.email, name: profile.name });
+    const secret = process.env.SESSION_JWT_SECRET;
+    if (!secret) throw new Error("session_jwt_secret_missing");
+    const token = jwt.sign({ appId: sessionAppId, openId: user.openId, name: user.name }, secret, { algorithm: "HS256", expiresIn: "30d" });
     setCookie(res, sessionCookieName, token, { maxAge: 60 * 60 * 24 * 30 });
     clearCookie(res, oauthStateCookieName);
     res.redirect(`${publicOrigin(req)}/editor?auth=success`);
   } catch (error) {
-    console.error("oauth callback failed", error);
-    res.status(502).send("Unable to complete Manus login. Please try again.");
+    console.error("google oauth callback failed", error);
+    res.status(502).send("Unable to complete Google login. Please try again.");
   }
 });
 
