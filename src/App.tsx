@@ -93,6 +93,9 @@ type Integration = {
   description: string;
 };
 
+// Código-fonte completo do projeto (TypeScript, HTML, CSS, servidor e configurações) em .zip.
+const SOURCE_ZIP_URL = "https://github.com/brenno-schnoor/siteforge/archive/refs/heads/main.zip";
+
 // Lista fixa de integrações disponíveis (antes vinha do servidor, que não roda no Pages).
 const availableIntegrations: Integration[] = [
   { id: "github", name: "GitHub", category: "Workflow", status: "available", description: "Sincronize projetos e publique via branches" },
@@ -601,7 +604,7 @@ function App() {
           <LanguageSelect value={language} onChange={setLanguage} />
           <button className="icon-button subtle" aria-label="Alternar tema" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button className="secondary-button" onClick={() => setPreview((value) => !value)}><Play size={14} fill="currentColor" /> {preview ? ui.backToEdit : ui.preview}</button>
-          <button className="publish-button" onClick={async () => { await saveProject(); notify(authUser ? "Versão sincronizada e pronta para publicar" : "Versão local pronta para publicar"); }}><Sparkles size={15} /> {saving ? ui.saving : ui.publish}</button>
+          <button className="publish-button" onClick={async () => { await saveProject(); window.open(SOURCE_ZIP_URL, "_blank", "noopener"); notify("Baixando o projeto completo em .zip"); }}><Sparkles size={15} /> {saving ? ui.saving : ui.publish}</button>
           <button className={`avatar-button ${authUser ? "signed-in" : ""}`} aria-label={authUser ? "Abrir conta" : "Entrar"} onClick={() => setAuthOpen(true)}>{authUser ? (authUser.name || authUser.email).slice(0, 2).toUpperCase() : <LogIn size={14} />}</button>
         </div>
       </header>
