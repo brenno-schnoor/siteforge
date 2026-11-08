@@ -10,6 +10,7 @@ import {
   BoxSelect,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Check,
   CircleHelp,
   Copy,
@@ -134,6 +135,8 @@ type Layer = {
   icon: typeof Box;
   box?: LayerBox;
   text?: string;
+  linkPageId?: string;
+  src?: string;
 };
 
 const starterPages: Page[] = [
@@ -407,6 +410,8 @@ function App() {
   const [selectedLayerId, setSelectedLayerId] = useState("orb");
   const [extraSelected, setExtraSelected] = useState<string[]>([]);
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
+  const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
+  const assetInputRef = useRef<HTMLInputElement>(null);
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
   const [activeInspector, setActiveInspector] = useState<InspectorTab>("design");
   const [activeSide, setActiveSide] = useState<"pages" | "layers">("pages");
@@ -544,6 +549,56 @@ function App() {
       localStorage.removeItem(draftKey);
     }
   }, [authLoading, authUser]);
+
+  const renamePage = (pageId: string, name: string) => {
+    const clean = name.trim();
+    setRenamingPageId(null);
+    if (!clean) return;
+    setPages((current) => current.map((page) => (page.id === pageId ? { ...page, name: clean } : page)));
+  };
+
+  const movePage = (pageId: string, direction: -1 | 1) => {
+    setPages((current) => {
+      const index = current.findIndex((page) => page.id === pageId);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  // Navegação entre páginas na pré-visualização: mantém o modo de pré-visualização.
+  const goToPage = (pageId: string) => {
+    const page = pages.find((item) => item.id === pageId);
+    if (!page) return;
+    setActivePageId(page.id);
+    window.history.pushState({}, "", url(page.path));
+    setRoutePath(page.path);
+  };
+
+  const uploadAsset = (file: File) => {
+    if (file.size > 2 * 1024 * 1024) return notify("Use uma imagem de até 2 MB");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const layer: Layer = {
+        id: `image-${Date.now()}`,
+        name: file.name,
+        kind: "image",
+        visible: true,
+        locked: false,
+        detail: "Imagem",
+        icon: ImageIcon,
+        box: { x: 20, y: 20, w: 40, h: 40 },
+        src: String(reader.result),
+      };
+      setLayers((current) => [layer, ...current]);
+      setSelectedLayerId(layer.id);
+      setActiveSide("layers");
+      notify("Imagem adicionada ao canvas");
+    };
+    reader.readAsDataURL(file);
+  };
 
   const addPage = () => {
     const nextNumber = pages.length + 1;
@@ -843,11 +898,12 @@ function App() {
           <div className="rail-top">
             <button className="rail-icon active" aria-label="Editor"><MousePointer2 size={17} /></button>
             <button className="rail-icon" aria-label={ui.projects} onClick={openProjects}><FolderOpen size={17} /></button>
-            <button className="rail-icon" aria-label="Assets"><Grid2X2 size={17} /></button>
+            <button className="rail-icon" aria-label="Assets" onClick={() => assetInputRef.current?.click()}><Grid2X2 size={17} /></button>
+            <input ref={assetInputRef} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadAsset(file); event.target.value = ""; }} />
             <button className="rail-icon" aria-label="MCP" onClick={openMcp}><Plug size={17} /></button>
             <button className="rail-icon" aria-label="Configurações" onClick={openIntegrations}><Settings2 size={17} /></button>
           </div>
-          <div className="rail-bottom"><button className="rail-icon" aria-label="Ajuda"><CircleHelp size={17} /></button><div className="rail-line" /><button className="rail-icon"><div className="tiny-avatar">JD</div></button></div>
+          <div className="rail-bottom"><button className="rail-icon" aria-label="Ajuda" onClick={() => notify("Ctrl+Z desfaz · Ctrl+D duplica · Delete exclui · Shift+clique seleciona várias")}><CircleHelp size={17} /></button><div className="rail-line" /><button className="rail-icon"><div className="tiny-avatar">JD</div></button></div>
         </aside>
 
         <aside className="sidebar left-sidebar">
@@ -857,7 +913,7 @@ function App() {
           {activeSide === "pages" ? (
             <div className="sidebar-scroll page-list">
               <div className="section-label-row"><span>Pages</span><button onClick={addPage}><Plus size={14} /></button></div>
-              {pages.map((page, index) => <div key={page.id} className={`page-card ${page.id === activePageId ? "active" : ""}`} role="button" tabIndex={0} onClick={() => selectPage(page)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") selectPage(page); }}><div className={`page-thumb thumb-${page.kind}`}><div className="thumb-orb" style={{ background: page.accent }} /><span>{String(index + 1).padStart(2, "0")}</span><div className="thumb-lines" /></div><div className="page-card-info"><strong>{page.name}</strong><span>{page.path}</span></div><button className="page-copy" aria-label={`Duplicar ${page.name}`} onClick={(event) => { event.stopPropagation(); selectPage(page); duplicatePage(page); }}><Copy size={12} /></button><button className="page-more" aria-label={`Excluir ${page.name}`} onClick={(event) => { event.stopPropagation(); removePage(page.id); }}><Trash2 size={13} /></button></div>)}
+              {pages.map((page, index) => <div key={page.id} className={`page-card ${page.id === activePageId ? "active" : ""}`} role="button" tabIndex={0} onClick={() => selectPage(page)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") selectPage(page); }}><div className={`page-thumb thumb-${page.kind}`}><div className="thumb-orb" style={{ background: page.accent }} /><span>{String(index + 1).padStart(2, "0")}</span><div className="thumb-lines" /></div><div className="page-card-info">{renamingPageId === page.id ? <input autoFocus defaultValue={page.name} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { event.stopPropagation(); if (event.key === "Enter") renamePage(page.id, event.currentTarget.value); if (event.key === "Escape") setRenamingPageId(null); }} onBlur={(event) => renamePage(page.id, event.currentTarget.value)} /> : <strong onDoubleClick={(event) => { event.stopPropagation(); setRenamingPageId(page.id); }}>{page.name}</strong>}<span>{page.path}</span></div><button className="page-move" aria-label={`Mover ${page.name} para cima`} onClick={(event) => { event.stopPropagation(); movePage(page.id, -1); }}><ChevronUp size={12} /></button><button className="page-move" aria-label={`Mover ${page.name} para baixo`} onClick={(event) => { event.stopPropagation(); movePage(page.id, 1); }}><ChevronDown size={12} /></button><button className="page-copy" aria-label={`Duplicar ${page.name}`} onClick={(event) => { event.stopPropagation(); selectPage(page); duplicatePage(page); }}><Copy size={12} /></button><button className="page-more" aria-label={`Excluir ${page.name}`} onClick={(event) => { event.stopPropagation(); removePage(page.id); }}><Trash2 size={13} /></button></div>)}
               <button className="add-page-dashed" onClick={addPage}><Plus size={14} /> Add new page</button>
               <div className="sidebar-note"><span className="note-icon"><Zap size={13} fill="currentColor" /></span><div><strong>Quick tip</strong><p>Use <kbd>⌘</kbd><kbd>K</kbd> to search any layer.</p></div></div>
             </div>
@@ -890,6 +946,14 @@ function App() {
               <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("bottom")}>Base</button>
               <button type="button" disabled={!selectedLayerId} onClick={() => distributeSelection("x")}>Distribuir H</button>
               <button type="button" disabled={!selectedLayerId} onClick={() => distributeSelection("y")}>Distribuir V</button>
+              {chosenLayer && (chosenLayer.kind === "button" || chosenLayer.kind === "text") && (
+                <label className="link-picker">Link
+                  <select value={chosenLayer.linkPageId ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { linkPageId: event.target.value || undefined })}>
+                    <option value="">Sem link</option>
+                    {pages.map((page) => <option key={page.id} value={page.id}>{page.name}</option>)}
+                  </select>
+                </label>
+              )}
             </div>
             <div className={`artboard-shell device-${device}`} style={{ transform: `scale(${zoom / 100})` }}>
               <div className="artboard-grid" />
@@ -901,10 +965,11 @@ function App() {
                   return (
                     <div
                       key={layer.id}
-                      className={`edit-layer edit-${layer.kind}${selected ? " is-selected" : ""}${layer.locked ? " is-locked" : ""}`}
+                      className={`edit-layer edit-${layer.kind}${selected ? " is-selected" : ""}${layer.locked ? " is-locked" : ""}${preview ? " is-preview" : ""}${preview && layer.linkPageId ? " is-linked" : ""}`}
                       style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, zIndex: layers.length - index, display: layer.visible ? undefined : "none" }}
                       onPointerDown={preview || editing ? undefined : (event) => beginLayerPointer(event, layer, index, "move")}
                       onDoubleClick={preview || layer.locked || (layer.kind !== "text" && layer.kind !== "button") ? undefined : () => setEditingLayerId(layer.id)}
+                      onClick={preview && layer.linkPageId ? () => goToPage(layer.linkPageId as string) : undefined}
                     >
                       {layer.kind === "scene" ? (
                         <SceneCanvas color={selectedColor} active={selected} preview={preview} onSelect={() => setSelectedLayerId(layer.id)} />
@@ -928,7 +993,7 @@ function App() {
                           onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
                         >{layer.text ?? "Explore the system"}</span>
                       ) : layer.kind === "image" ? (
-                        <div className="edit-image" />
+                        <div className="edit-image" style={layer.src ? { backgroundImage: `url(${layer.src})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
                       ) : (
                         <span className="edit-frame-label">{preview ? "" : layer.name}</span>
                       )}
