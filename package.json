@@ -5,9 +5,11 @@
   "type": "module",
   "packageManager": "npm@10.9.2",
   "scripts": {
-    "dev": "node server/index.mjs --dev",
-    "build": "tsc -b && vite build",
-    "preview": "node server/index.mjs"
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
   },
   "dependencies": {
     "@types/react": "latest",
@@ -24,5 +26,8 @@
     "three": "latest",
     "typescript": "latest",
     "vite": "latest"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
   }
 }
