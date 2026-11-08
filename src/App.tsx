@@ -93,6 +93,13 @@ type Integration = {
   description: string;
 };
 
+// Lista fixa de integrações disponíveis (antes vinha do servidor, que não roda no Pages).
+const availableIntegrations: Integration[] = [
+  { id: "github", name: "GitHub", category: "Workflow", status: "available", description: "Sincronize projetos e publique via branches" },
+  { id: "notion", name: "Notion", category: "Content", status: "available", description: "Transforme páginas Notion em conteúdo" },
+  { id: "analytics", name: "Analytics", category: "Insights", status: "available", description: "Eventos e conversões do seu site" },
+];
+
 type McpServer = {
   id: string;
   name: string;
@@ -559,14 +566,8 @@ function App() {
       setAuthOpen(true);
       return;
     }
-    try {
-      const response = await fetch(url("/api/integrations"));
-      const data = await response.json();
-      setIntegrations(data.integrations || []);
-      setIntegrationsOpen(true);
-    } catch {
-      notify("Não foi possível carregar as integrações");
-    }
+    setIntegrations(availableIntegrations);
+    setIntegrationsOpen(true);
   };
 
   const openMcp = () => setMcpOpen(true);
