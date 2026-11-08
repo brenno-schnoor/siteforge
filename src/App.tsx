@@ -24,6 +24,7 @@ import {
   LogIn,
   LogOut,
   Image as ImageIcon,
+  Languages,
   Layers3,
   Lock,
   Maximize2,
@@ -60,7 +61,21 @@ import { beginGoogleLogin, getCurrentUser, loadCloudProject, saveCloudProject, s
 
 type Device = "desktop" | "tablet" | "mobile";
 type InspectorTab = "design" | "animate";
-type LayerKind = "scene" | "text" | "button" | "image" | "group";
+type LayerKind = "scene" | "text" | "button" | "image" | "group" | "language";
+type Shape3D = "orb" | "cube" | "torus" | "pyramid" | "knot" | "cylinder";
+const shapeOptions: Record<Shape3D, string> = { orb: "Esfera", cube: "Cubo", torus: "Anel", pyramid: "Pirâmide", knot: "Nó", cylinder: "Cilindro" };
+const siteLanguages: Record<string, string> = { pt: "Português", en: "English", es: "Español", fr: "Français", de: "Deutsch", it: "Italiano", ja: "日本語" };
+
+function shapeGeometry(shape: Shape3D, scale: number) {
+  switch (shape) {
+    case "cube": return new THREE.BoxGeometry(1.7 * scale, 1.7 * scale, 1.7 * scale);
+    case "torus": return new THREE.TorusGeometry(0.95 * scale, 0.4 * scale, 32, 96);
+    case "pyramid": return new THREE.ConeGeometry(1.25 * scale, 2.3 * scale, 4);
+    case "knot": return new THREE.TorusKnotGeometry(0.8 * scale, 0.28 * scale, 160, 24);
+    case "cylinder": return new THREE.CylinderGeometry(0.9 * scale, 0.9 * scale, 2 * scale, 48);
+    default: return new THREE.IcosahedronGeometry(1.18 * scale, scale === 1 ? 4 : 2);
+  }
+}
 type Theme = "dark" | "light";
 type Language = "pt" | "en" | "es";
 
@@ -75,6 +90,12 @@ const uiCopy: Record<Language, { editor: string; projects: string; preview: stri
   en: { editor: "Editor", projects: "Projects", preview: "Preview", backToEdit: "Back to edit", publish: "Publish", saving: "Saving", saved: "Saved now", pages: "Pages", layers: "Layers", addPage: "Add page", openEditor: "Open editor", newProject: "New project", signOut: "Sign out", language: "Language", workspace: "workspace", cloudSync: "Cloud sync active", lastEdited: "Last edited just now", visualSystem: "Visual web system", blankCanvas: "Start with a blank canvas", backToSite: "Back to SiteForge", membersOnly: "Members-only workspace", buildA: "Build from a", buildB: "point of view.", loginDescription: "Sign in to build sites, edit pages, save projects and connect MCP tools.", continueGoogle: "Continue with Google" },
   es: { editor: "Editor", projects: "Proyectos", preview: "Vista previa", backToEdit: "Volver a editar", publish: "Publicar", saving: "Guardando", saved: "Guardado ahora", pages: "Páginas", layers: "Capas", addPage: "Añadir página", openEditor: "Abrir editor", newProject: "Nuevo proyecto", signOut: "Cerrar sesión", language: "Idioma", workspace: "espacio de trabajo", cloudSync: "Sincronización en la nube activa", lastEdited: "Editado ahora", visualSystem: "Sistema web visual", blankCanvas: "Empieza con una pantalla en blanco", backToSite: "Volver a SiteForge", membersOnly: "Espacio exclusivo para miembros", buildA: "Construye desde un", buildB: "punto de vista.", loginDescription: "Inicia sesión para crear sitios, editar páginas, guardar proyectos y conectar herramientas MCP.", continueGoogle: "Continuar con Google",  },
 };
+
+function SiteLanguageSwitch({ codes, value, preview, onChange }: { codes: string[]; value: string; preview: boolean; onChange: (code: string) => void }) {
+  const list = codes.length ? codes : ["pt"];
+  if (!preview) return <div className="site-lang edit-lang"><Languages size={12} /> {list.map((code) => siteLanguages[code]).join(" · ")}</div>;
+  return <select className="site-lang" aria-label="Idioma" value={list.includes(value) ? value : list[0]} onChange={(event) => onChange(event.target.value)}>{list.map((code) => <option key={code} value={code}>{siteLanguages[code]}</option>)}</select>;
+}
 
 const editorCopy: Record<Language, Record<"untitled" | "saved" | "cloud" | "local" | "structure" | "layersCount" | "select" | "frame" | "type" | "media" | "threeD" | "desktop" | "tablet" | "mobile" | "addNewPage" | "undo" | "redo" | "theme" | "open" | "tip" | "pageNamed" | "back" | "search", string>> = {
   pt: { untitled: "Projeto sem nome", saved: "Salvo há pouco", cloud: "Nuvem", local: "Local", structure: "Estrutura", layersCount: "camadas", select: "Selecionar", frame: "Quadro", type: "Texto", media: "Mídia", threeD: "3D", desktop: "Desktop", tablet: "Tablet", mobile: "Celular", addNewPage: "Adicionar nova página", undo: "Desfazer", redo: "Refazer", theme: "Alternar tema", open: "Abrir", tip: "Dica rápida", pageNamed: "Página", back: "Voltar", search: "Buscar (⌘K)" },
@@ -151,6 +172,9 @@ type Layer = {
   glow?: boolean;
   intensity?: number;
   trigger?: "move";
+  shape?: Shape3D;
+  languages?: string[];
+  translations?: Record<string, string>;
 };
 
 const starterPages: Page[] = [
@@ -174,6 +198,7 @@ function iconForLayerKind(kind: LayerKind) {
   if (kind === "text") return Type;
   if (kind === "button") return Square;
   if (kind === "image") return ImageIcon;
+  if (kind === "language") return Languages;
   return Box;
 }
 
@@ -253,7 +278,7 @@ function isProjectDraft(value: unknown): value is { pages: Page[]; layers: Layer
     && (draft.font === undefined || (typeof draft.font === "string" && draft.font.length <= 64));
 }
 
-function SceneCanvas({ color, active, preview, onSelect }: { color: string; active: boolean; preview: boolean; onSelect: () => void }) {
+function SceneCanvas({ color, active, preview, onSelect, shape }: { color: string; active: boolean; preview: boolean; onSelect: () => void; shape: Shape3D }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
   const onSelectRef = useRef(onSelect);
@@ -290,14 +315,14 @@ function SceneCanvas({ color, active, preview, onSelect }: { color: string; acti
       emissive: color,
       emissiveIntensity: 0.18,
     });
-    const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(1.18, 4), material);
+    const orb = new THREE.Mesh(shapeGeometry(shape, 1), material);
     orb.castShadow = true;
     orb.receiveShadow = true;
     group.add(orb);
     materialRef.current = material;
 
     const wire = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1.31, 2),
+      shapeGeometry(shape, 1.11),
       new THREE.MeshBasicMaterial({ color: "#e9ffbf", wireframe: true, transparent: true, opacity: 0.12 })
     );
     group.add(wire);
@@ -470,6 +495,9 @@ function App() {
   const [toast, setToast] = useState("");
   const [zoom, setZoom] = useState(82);
   const [showGrid, setShowGrid] = useState(false);
+  const [siteLang, setSiteLang] = useState("pt");
+  const shownText = (layer: Layer, fallback: string) => (preview && layer.translations?.[siteLang]) || fallback;
+  const siteLanguageCodes = layers.find((layer) => layer.kind === "language")?.languages ?? [];
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("siteforge-theme") as Theme) || "dark");
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem("siteforge-language") as Language) || "pt");
@@ -715,8 +743,8 @@ function App() {
     notify("Página removida");
   };
 
-  const addLayer = (kind: LayerKind, name: string, icon: typeof Box, detail: string) => {
-    const layer: Layer = { id: `${kind}-${Date.now()}`, name, kind, visible: true, locked: false, detail, icon, box: { x: 35, y: 38, w: 30, h: 20 } };
+  const addLayer = (kind: LayerKind, name: string, icon: typeof Box, detail: string, extra?: Partial<Layer>) => {
+    const layer: Layer = { id: `${kind}-${Date.now()}`, name, kind, visible: true, locked: false, detail, icon, box: { x: 35, y: 38, w: 30, h: 20 }, ...extra };
     setLayers((current) => [layer, ...current]);
     setSelectedLayerId(layer.id);
     notify(`${name} inserido no canvas`);
@@ -990,7 +1018,7 @@ function App() {
 
         <section className="editor-stage">
           <div className="stage-toolbar">
-            <div className="toolbar-group"><button className="tool-button active" title="Limpar seleção" onClick={() => { setSelectedLayerId(""); setExtraSelected([]); }}><MousePointer2 size={15} /> {editorCopy[language].select}</button><button className="tool-button" title="Inserir frame" onClick={() => addLayer("group", "Frame", BoxSelect, "Frame · auto")}><BoxSelect size={15} /> {editorCopy[language].frame}</button><button className="tool-button" title="Inserir texto" onClick={() => addLayer("text", "Texto", Type, "Texto · 32 px")}><Type size={15} /> {editorCopy[language].type}</button><button className="tool-button" title="Inserir imagem" onClick={() => assetInputRef.current?.click()}><ImageIcon size={15} /> {editorCopy[language].media}</button><button className="tool-button" title="Inserir objeto 3D" onClick={() => addLayer("scene", "Objeto 3D", Move3d, "Esfera · 3D")}><Move3d size={15} /> {editorCopy[language].threeD}</button></div>
+            <div className="toolbar-group"><button className="tool-button active" title="Limpar seleção" onClick={() => { setSelectedLayerId(""); setExtraSelected([]); }}><MousePointer2 size={15} /> {editorCopy[language].select}</button><button className="tool-button" title="Inserir frame" onClick={() => addLayer("group", "Frame", BoxSelect, "Frame · auto")}><BoxSelect size={15} /> {editorCopy[language].frame}</button><button className="tool-button" title="Inserir texto" onClick={() => addLayer("text", "Texto", Type, "Texto · 32 px")}><Type size={15} /> {editorCopy[language].type}</button><button className="tool-button" title="Inserir imagem" onClick={() => assetInputRef.current?.click()}><ImageIcon size={15} /> {editorCopy[language].media}</button><button className="tool-button" title="Inserir objeto 3D" onClick={() => addLayer("scene", "Objeto 3D", Move3d, "Esfera · 3D", { shape: "orb" })}><Move3d size={15} /> {editorCopy[language].threeD}</button><button className="tool-button" title="Inserir seletor de idioma" onClick={() => addLayer("language", "Seletor de idioma", Languages, "Idiomas · 2", { languages: ["pt", "en"], box: { x: 74, y: 4, w: 20, h: 6 } })}><Languages size={15} /> Idioma</button></div>
             <div className="toolbar-center"><button className={`device-button ${device === "desktop" ? "active" : ""}`} onClick={() => setDevice("desktop")}><Maximize2 size={13} /> {editorCopy[language].desktop}</button><button className={`device-button ${device === "tablet" ? "active" : ""}`} onClick={() => setDevice("tablet")}><Square size={12} /> {editorCopy[language].tablet}</button><button className={`device-button ${device === "mobile" ? "active" : ""}`} onClick={() => setDevice("mobile")}><PanelLeft size={12} /> {editorCopy[language].mobile}</button></div>
             <div className="toolbar-group right"><button className="icon-button" aria-label={editorCopy[language].search} title={editorCopy[language].search} onClick={() => setPaletteOpen(true)}><Search size={15} /></button><button className={`icon-button ${showGrid ? "active" : ""}`} aria-label="Mostrar grade" title="Mostrar grade" onClick={() => setShowGrid((value) => !value)}><Grid2X2 size={15} /></button><button className="zoom-button" onClick={() => setZoom((value) => value >= 100 ? 60 : value + 10)}>{zoom}% <ChevronDown size={13} /></button></div>
           </div>
@@ -1032,7 +1060,7 @@ function App() {
                       onClick={preview && layer.linkPageId ? () => goToPage(layer.linkPageId as string) : undefined}
                     >
                       {layer.kind === "scene" ? (
-                        <SceneCanvas color={selectedColor} active={selected} preview={preview} onSelect={() => setSelectedLayerId(layer.id)} />
+                        <SceneCanvas key={layer.shape ?? "orb"} shape={layer.shape ?? "orb"} color={selectedColor} active={selected} preview={preview} onSelect={() => setSelectedLayerId(layer.id)} />
                       ) : layer.kind === "text" ? (
                         <p
                           className="edit-text"
@@ -1042,7 +1070,7 @@ function App() {
                           ref={(el) => { if (el && editing) el.focus(); }}
                           onBlur={editing ? (event) => finishEditing(layer.id, event.currentTarget.innerText) : undefined}
                           onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
-                        >{layer.id === "headline" && !layer.text ? `${pageContent.first} ${pageContent.second}` : layer.text ?? layer.name}</p>
+                        >{shownText(layer, layer.id === "headline" && !layer.text ? `${pageContent.first} ${pageContent.second}` : layer.text ?? layer.name)}</p>
                       ) : layer.kind === "button" ? (
                         <span
                           className="art-cta"
@@ -1051,7 +1079,9 @@ function App() {
                           ref={(el) => { if (el && editing) el.focus(); }}
                           onBlur={editing ? (event) => finishEditing(layer.id, event.currentTarget.innerText) : undefined}
                           onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
-                        >{layer.text ?? "Explore the system"}</span>
+                        >{shownText(layer, layer.text ?? "Explore the system")}</span>
+                      ) : layer.kind === "language" ? (
+                        <SiteLanguageSwitch codes={layer.languages ?? ["pt", "en"]} value={siteLang} preview={preview} onChange={setSiteLang} />
                       ) : layer.kind === "image" ? (
                         <div className="edit-image" style={layer.src ? { backgroundImage: `url(${layer.src})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
                       ) : (
@@ -1087,6 +1117,9 @@ function App() {
               ))}</div></div>
             <div className="inspector-section"><div className="inspector-section-title">Appearance <ChevronDown size={14} /></div><div className="color-row"><span>Fill</span><button className="color-control" onClick={() => setSelectedColor(selectedColor === "#b8ff3d" ? "#8f9dff" : "#b8ff3d")}><span style={{ background: selectedColor }} />{selectedColor}<ChevronRight size={13} /></button></div><div className="color-row"><span>Gradient</span><button className="gradient-control"><span />linear · 135° <ChevronRight size={13} /></button></div><div className="swatch-row">{colorSwatches.map((color) => <button key={color} className={`swatch ${selectedColor === color ? "active" : ""}`} style={{ background: color }} onClick={() => setSelectedColor(color)} aria-label={`Selecionar cor ${color}`} />)}<button className="swatch-add"><Plus size={13} /></button></div></div>
             <div className="inspector-section"><div className="inspector-section-title">Typography <ChevronDown size={14} /></div><div className="select-field"><Type size={13} /><select value={font} onChange={(event) => setFont(event.target.value)}><option>Space Grotesk</option><option>DM Sans</option><option>Instrument Serif</option></select><ChevronDown size={13} /></div><div className="property-grid"><Property label="Weight" value="Medium" /><Property label="Size" value="64 px" /><Property label="Line" value="0.95" /><Property label="Track" value="-0.03em" /></div></div>
+            {chosenLayer?.kind === "scene" && <div className="inspector-section"><div className="inspector-section-title">Forma 3D <ChevronDown size={14} /></div><div className="shape-grid">{(Object.keys(shapeOptions) as Shape3D[]).map((shape) => <button key={shape} className={chosenLayer.shape === shape || (!chosenLayer.shape && shape === "orb") ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { shape })}>{shapeOptions[shape]}</button>)}</div></div>}
+            {chosenLayer?.kind === "language" && <div className="inspector-section"><div className="inspector-section-title">Idiomas do site <ChevronDown size={14} /></div><div className="shape-grid">{Object.keys(siteLanguages).map((code) => { const active = (chosenLayer.languages ?? []).includes(code); return <button key={code} className={active ? "active" : ""} onClick={() => { const current = chosenLayer.languages ?? []; updateLayer(chosenLayer.id, { languages: active ? current.filter((item) => item !== code) : [...current, code] }); }}>{siteLanguages[code]}</button>; })}</div></div>}
+            {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && siteLanguageCodes.length > 0 && <div className="inspector-section"><div className="inspector-section-title">Traduções <ChevronDown size={14} /></div>{siteLanguageCodes.map((code) => <label key={code} className="property-field translation-field"><span>{siteLanguages[code]}</span><input value={chosenLayer.translations?.[code] ?? ""} placeholder={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { translations: { ...(chosenLayer.translations ?? {}), [code]: event.target.value } })} /></label>)}</div>}
             <div className="inspector-section"><div className="inspector-section-title">Effects <ChevronDown size={14} /></div><div className="effect-row"><div className="effect-icon"><Sparkles size={14} /></div><div><strong>Soft glow</strong><span>Screen · 22%</span></div><button className={`toggle ${chosenLayer?.glow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { glow: !chosenLayer.glow }); }}><span /></button></div><div className="effect-row"><div className="effect-icon dark"><Box size={14} /></div><div><strong>Noise texture</strong><span>Overlay · 12%</span></div><button className={`toggle ${layers.find((item) => item.id === "noise")?.visible !== false ? "active" : ""}`} onClick={() => { const noise = layers.find((item) => item.id === "noise"); if (noise) updateLayer(noise.id, { visible: !noise.visible }); }}><span /></button></div></div>
           </div> : <div className="inspector-scroll"><div className="animation-card"><div className="animation-icon"><MousePointer2 size={16} /></div><div><span className="eyebrow">Pointer interaction</span><h3>Follow cursor</h3><p>Object subtly leans toward the pointer position.</p></div><button className={`toggle ${chosenLayer?.follow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { follow: !chosenLayer.follow }); }}><span /></button></div><div className="inspector-section"><div className="inspector-section-title">Trigger <ChevronDown size={14} /></div><div className="select-field"><MousePointer2 size={13} /><select value="move" onChange={() => undefined}><option value="move">On mouse move</option></select><ChevronDown size={13} /></div></div><div className="inspector-section"><div className="inspector-section-title">Motion curve <ChevronDown size={14} /></div><div className="curve-preview"><span /><span /><span /><span /><span /></div><div className="curve-labels"><span>Gentle</span><span>Spring</span></div></div><div className="inspector-section"><div className="inspector-section-title">Response <ChevronDown size={14} /></div><label className="property-field"><span>Intensity %</span><input type="number" min={0} max={100} disabled={!chosenLayer} value={chosenLayer?.intensity ?? 12} onChange={(event) => { if (chosenLayer) updateLayer(chosenLayer.id, { intensity: Number(event.target.value) }); }} /></label><Property label="Duration" value="800 ms" /><Property label="Delay" value="0 ms" /></div></div>}
           <div className="inspector-footer"><button className="delete-button" onClick={deleteSelectedLayer}><Trash2 size={14} /> Delete layer</button><span className="muted">{selectedLayer?.locked ? "Locked" : "Editable"}</span></div>
