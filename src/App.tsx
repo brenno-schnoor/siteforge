@@ -91,6 +91,15 @@ const uiCopy: Record<Language, { editor: string; projects: string; preview: stri
   es: { editor: "Editor", projects: "Proyectos", preview: "Vista previa", backToEdit: "Volver a editar", publish: "Publicar", saving: "Guardando", saved: "Guardado ahora", pages: "Páginas", layers: "Capas", addPage: "Añadir página", openEditor: "Abrir editor", newProject: "Nuevo proyecto", signOut: "Cerrar sesión", language: "Idioma", workspace: "espacio de trabajo", cloudSync: "Sincronización en la nube activa", lastEdited: "Editado ahora", visualSystem: "Sistema web visual", blankCanvas: "Empieza con una pantalla en blanco", backToSite: "Volver a SiteForge", membersOnly: "Espacio exclusivo para miembros", buildA: "Construye desde un", buildB: "punto de vista.", loginDescription: "Inicia sesión para crear sitios, editar páginas, guardar proyectos y conectar herramientas MCP.", continueGoogle: "Continuar con Google",  },
 };
 
+async function translateText(text: string, from: string, to: string): Promise<string> {
+  const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`);
+  if (!response.ok) throw new Error("translate_failed");
+  const data = await response.json();
+  const raw: unknown = data?.responseData?.translatedText;
+  if (typeof raw !== "string" || !raw || /MYMEMORY WARNING|INVALID|QUERY LENGTH/i.test(raw)) throw new Error("translate_failed");
+  return new DOMParser().parseFromString(raw, "text/html").documentElement.textContent ?? raw;
+}
+
 function SiteLanguageSwitch({ codes, value, onChange, style }: { codes: string[]; value: string; onChange: (code: string) => void; style: "select" | "buttons" }) {
   const list = codes.length ? codes : ["pt"];
   const current = list.includes(value) ? value : list[0];
@@ -180,6 +189,8 @@ type Layer = {
   shape?: Shape3D;
   languages?: string[];
   languageStyle?: "select" | "buttons";
+  sourceLanguage?: string;
+  noTranslate?: boolean;
   translations?: Record<string, string>;
 };
 
@@ -502,9 +513,7 @@ function App() {
   const [zoom, setZoom] = useState(82);
   const [showGrid, setShowGrid] = useState(false);
   const [siteLang, setSiteLang] = useState("pt");
-  const shownText = (layer: Layer, fallback: string) => layer.translations?.[siteLang] || fallback;
   const siteLanguageCodes = layers.find((layer) => layer.kind === "language")?.languages ?? [];
-  const missingTranslations = layers.filter((layer) => (layer.kind === "text" || layer.kind === "button") && !layer.translations?.[siteLang]).length;
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("siteforge-theme") as Theme) || "dark");
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem("siteforge-language") as Language) || "pt");
@@ -534,6 +543,33 @@ function App() {
     en: { home: { eyebrow: "Selected layer · Orb / interactive", first: "Design", second: "in motion.", description: "Build websites that feel less like pages\nand more like places." }, work: { eyebrow: "Case study · Selected canvas", first: "Make", second: "an impact.", description: "Turn bold ideas into digital spaces\npeople want to return to." }, about: { eyebrow: "Studio system · About page", first: "Built for", second: "curiosity.", description: "Shape a point of view with tools\nthat move at the speed of thought." } },
     es: { home: { eyebrow: "Capa seleccionada · Orb / interactivo", first: "Diseño", second: "en movimiento.", description: "Crea sitios que se sientan menos como páginas\ny más como lugares." }, work: { eyebrow: "Caso de estudio · Canvas seleccionado", first: "Causa", second: "impacto.", description: "Convierte ideas fuertes en espacios digitales\na los que la gente quiera volver." }, about: { eyebrow: "Sistema del estudio · Página sobre", first: "Hecho para", second: "la curiosidad.", description: "Construye un punto de vista con herramientas\nque se mueven al ritmo del pensamiento." } },
   }[language][activePage?.kind ?? "home"];
+
+  const siteLanguageLayer = layers.find((layer) => layer.kind === "language");
+  const sourceLang = siteLanguageLayer?.sourceLanguage ?? "pt";
+  const autoRequested = useRef(new Set<string>());
+  const [autoTranslated, setAutoTranslated] = useState<Record<string, string>>({});
+  const baseTextOf = (layer: Layer) => layer.kind === "button"
+    ? (layer.text ?? "Explore the system")
+    : (layer.id === "headline" && !layer.text ? `${pageContent.first} ${pageContent.second}` : layer.text ?? layer.name);
+  const autoKey = (layer: Layer) => `${layer.id}:${siteLang}:${baseTextOf(layer)}`;
+  const shownText = (layer: Layer) => {
+    if (layer.noTranslate || editingLayerId === layer.id || siteLang === sourceLang) return baseTextOf(layer);
+    return layer.translations?.[siteLang] || autoTranslated[autoKey(layer)] || baseTextOf(layer);
+  };
+
+  // Tradução automática: traduz sob demanda os textos sem tradução manual para o idioma escolhido.
+  useEffect(() => {
+    if (siteLang === sourceLang) return;
+    layers.forEach((layer) => {
+      if ((layer.kind !== "text" && layer.kind !== "button") || layer.noTranslate || layer.translations?.[siteLang]) return;
+      const key = autoKey(layer);
+      if (autoRequested.current.has(key)) return;
+      autoRequested.current.add(key);
+      translateText(baseTextOf(layer), sourceLang, siteLang)
+        .then((out) => setAutoTranslated((current) => ({ ...current, [key]: out })))
+        .catch(() => autoRequested.current.delete(key));
+    });
+  }, [layers, siteLang, sourceLang]);
 
   useEffect(() => {
     const syncRoute = () => {
@@ -1077,7 +1113,7 @@ function App() {
                           ref={(el) => { if (el && editing) el.focus(); }}
                           onBlur={editing ? (event) => finishEditing(layer.id, event.currentTarget.innerText) : undefined}
                           onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
-                        >{shownText(layer, layer.id === "headline" && !layer.text ? `${pageContent.first} ${pageContent.second}` : layer.text ?? layer.name)}</p>
+                        >{shownText(layer)}</p>
                       ) : layer.kind === "button" ? (
                         <span
                           className="art-cta"
@@ -1086,7 +1122,7 @@ function App() {
                           ref={(el) => { if (el && editing) el.focus(); }}
                           onBlur={editing ? (event) => finishEditing(layer.id, event.currentTarget.innerText) : undefined}
                           onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
-                        >{shownText(layer, layer.text ?? "Explore the system")}</span>
+                        >{shownText(layer)}</span>
                       ) : layer.kind === "language" ? (
                         <SiteLanguageSwitch codes={layer.languages ?? ["pt", "en"]} value={siteLang} onChange={setSiteLang} style={layer.languageStyle ?? "select"} />
                       ) : layer.kind === "image" ? (
@@ -1125,8 +1161,9 @@ function App() {
             <div className="inspector-section"><div className="inspector-section-title">Appearance <ChevronDown size={14} /></div><div className="color-row"><span>Fill</span><button className="color-control" onClick={() => setSelectedColor(selectedColor === "#b8ff3d" ? "#8f9dff" : "#b8ff3d")}><span style={{ background: selectedColor }} />{selectedColor}<ChevronRight size={13} /></button></div><div className="color-row"><span>Gradient</span><button className="gradient-control"><span />linear · 135° <ChevronRight size={13} /></button></div><div className="swatch-row">{colorSwatches.map((color) => <button key={color} className={`swatch ${selectedColor === color ? "active" : ""}`} style={{ background: color }} onClick={() => setSelectedColor(color)} aria-label={`Selecionar cor ${color}`} />)}<button className="swatch-add"><Plus size={13} /></button></div></div>
             <div className="inspector-section"><div className="inspector-section-title">Typography <ChevronDown size={14} /></div><div className="select-field"><Type size={13} /><select value={font} onChange={(event) => setFont(event.target.value)}><option>Space Grotesk</option><option>DM Sans</option><option>Instrument Serif</option></select><ChevronDown size={13} /></div><div className="property-grid"><Property label="Weight" value="Medium" /><Property label="Size" value="64 px" /><Property label="Line" value="0.95" /><Property label="Track" value="-0.03em" /></div></div>
             {chosenLayer?.kind === "scene" && <div className="inspector-section"><div className="inspector-section-title">Forma 3D <ChevronDown size={14} /></div><div className="shape-grid">{(Object.keys(shapeOptions) as Shape3D[]).map((shape) => <button key={shape} className={chosenLayer.shape === shape || (!chosenLayer.shape && shape === "orb") ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { shape })}>{shapeOptions[shape]}</button>)}</div></div>}
-            {chosenLayer?.kind === "language" && <div className="inspector-section"><div className="inspector-section-title">Idiomas do site <ChevronDown size={14} /></div><div className="shape-grid lang-style-grid"><button className={(chosenLayer.languageStyle ?? "select") === "select" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "select" })}>Menu</button><button className={chosenLayer.languageStyle === "buttons" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "buttons" })}>Botões</button></div><div className="shape-grid">{Object.keys(siteLanguages).map((code) => { const active = (chosenLayer.languages ?? []).includes(code); return <button key={code} className={active ? "active" : ""} onClick={() => { const current = chosenLayer.languages ?? []; updateLayer(chosenLayer.id, { languages: active ? current.filter((item) => item !== code) : [...current, code] }); }}>{siteLanguages[code]}</button>; })}</div></div>}
-            {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && siteLanguageCodes.length > 0 && <div className="inspector-section"><div className="inspector-section-title">Traduções <ChevronDown size={14} /></div><p className="translation-hint">Ao escolher {siteLanguages[siteLang]} no site, o texto muda só se a tradução estiver preenchida abaixo. Faltam {missingTranslations} texto(s) em {siteLanguages[siteLang]}.</p>{siteLanguageCodes.map((code) => <label key={code} className="property-field translation-field"><span>{siteLanguages[code]}</span><input value={chosenLayer.translations?.[code] ?? ""} placeholder={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { translations: { ...(chosenLayer.translations ?? {}), [code]: event.target.value } })} /></label>)}</div>}
+            {chosenLayer?.kind === "language" && <div className="inspector-section"><div className="inspector-section-title">Idiomas do site <ChevronDown size={14} /></div><label className="property-field translation-field"><span>Idioma original dos textos</span><select value={chosenLayer.sourceLanguage ?? "pt"} onChange={(event) => updateLayer(chosenLayer.id, { sourceLanguage: event.target.value })}>{Object.keys(siteLanguages).map((code) => <option key={code} value={code}>{siteLanguages[code]}</option>)}</select></label><div className="shape-grid lang-style-grid"><button className={(chosenLayer.languageStyle ?? "select") === "select" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "select" })}>Menu</button><button className={chosenLayer.languageStyle === "buttons" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "buttons" })}>Botões</button></div><div className="shape-grid">{Object.keys(siteLanguages).map((code) => { const active = (chosenLayer.languages ?? []).includes(code); return <button key={code} className={active ? "active" : ""} onClick={() => { const current = chosenLayer.languages ?? []; updateLayer(chosenLayer.id, { languages: active ? current.filter((item) => item !== code) : [...current, code] }); }}>{siteLanguages[code]}</button>; })}</div></div>}
+            {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && <div className="inspector-section"><div className="inspector-section-title">Tradução <ChevronDown size={14} /></div><div className="effect-row"><div><strong>Não traduzir</strong><span>Mantém este elemento no idioma original</span></div><button className={`toggle ${chosenLayer.noTranslate ? "active" : ""}`} onClick={() => updateLayer(chosenLayer.id, { noTranslate: !chosenLayer.noTranslate })}><span /></button></div></div>}
+            {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && siteLanguageCodes.length > 0 && !chosenLayer.noTranslate && <div className="inspector-section"><div className="inspector-section-title">Traduções <ChevronDown size={14} /></div><p className="translation-hint">Os textos são traduzidos automaticamente ao escolher um idioma no site. Escreva abaixo se quiser substituir a tradução automática.</p>{siteLanguageCodes.map((code) => <label key={code} className="property-field translation-field"><span>{siteLanguages[code]}</span><input value={chosenLayer.translations?.[code] ?? ""} placeholder={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { translations: { ...(chosenLayer.translations ?? {}), [code]: event.target.value } })} /></label>)}</div>}
             <div className="inspector-section"><div className="inspector-section-title">Effects <ChevronDown size={14} /></div><div className="effect-row"><div className="effect-icon"><Sparkles size={14} /></div><div><strong>Soft glow</strong><span>Screen · 22%</span></div><button className={`toggle ${chosenLayer?.glow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { glow: !chosenLayer.glow }); }}><span /></button></div><div className="effect-row"><div className="effect-icon dark"><Box size={14} /></div><div><strong>Noise texture</strong><span>Overlay · 12%</span></div><button className={`toggle ${layers.find((item) => item.id === "noise")?.visible !== false ? "active" : ""}`} onClick={() => { const noise = layers.find((item) => item.id === "noise"); if (noise) updateLayer(noise.id, { visible: !noise.visible }); }}><span /></button></div></div>
           </div> : <div className="inspector-scroll"><div className="animation-card"><div className="animation-icon"><MousePointer2 size={16} /></div><div><span className="eyebrow">Pointer interaction</span><h3>Follow cursor</h3><p>Object subtly leans toward the pointer position.</p></div><button className={`toggle ${chosenLayer?.follow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { follow: !chosenLayer.follow }); }}><span /></button></div><div className="inspector-section"><div className="inspector-section-title">Trigger <ChevronDown size={14} /></div><div className="select-field"><MousePointer2 size={13} /><select value="move" onChange={() => undefined}><option value="move">On mouse move</option></select><ChevronDown size={13} /></div></div><div className="inspector-section"><div className="inspector-section-title">Motion curve <ChevronDown size={14} /></div><div className="curve-preview"><span /><span /><span /><span /><span /></div><div className="curve-labels"><span>Gentle</span><span>Spring</span></div></div><div className="inspector-section"><div className="inspector-section-title">Response <ChevronDown size={14} /></div><label className="property-field"><span>Intensity %</span><input type="number" min={0} max={100} disabled={!chosenLayer} value={chosenLayer?.intensity ?? 12} onChange={(event) => { if (chosenLayer) updateLayer(chosenLayer.id, { intensity: Number(event.target.value) }); }} /></label><Property label="Duration" value="800 ms" /><Property label="Delay" value="0 ms" /></div></div>}
           <div className="inspector-footer"><button className="delete-button" onClick={deleteSelectedLayer}><Trash2 size={14} /> Delete layer</button><span className="muted">{selectedLayer?.locked ? "Locked" : "Editable"}</span></div>
