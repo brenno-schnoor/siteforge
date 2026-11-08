@@ -305,3 +305,14 @@ kbd { font-family: 'Space Grotesk'; border: 1px solid rgba(255,255,255,.12); bor
 .align-bar button:disabled { opacity: .4; cursor: default; }
 .align-bar button:not(:disabled):hover { border-color: var(--lime); color: var(--lime); }
 .edit-layer.is-selected[contenteditable="true"] { outline-color: var(--lime); cursor: text; }
+
+/* Editor etapa 3: páginas, links e assets. */
+.page-move { width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: #9da4a6; }
+.page-move:hover { color: var(--lime); }
+.page-card-info input { font: inherit; background: #15171d; color: #eff2ec; border: 1px solid var(--lime); border-radius: 4px; padding: 2px 4px; width: 100%; }
+.link-picker { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: #9da4a6; }
+.link-picker select { background: #1d2029; color: #d9dfd6; border: 1px solid rgba(255, 255, 255, .12); border-radius: 5px; font-size: 10px; padding: 3px 6px; }
+.edit-layer[onclick], .edit-layer:has(.art-cta), .edit-layer.edit-text:has(p) { cursor: default; }
+.artboard-shell.is-preview .edit-layer { cursor: default; }
+.edit-layer.is-preview { cursor: default; }
+.edit-layer.is-linked { cursor: pointer; }
