@@ -457,3 +457,11 @@ select.site-lang { appearance: auto; }
 [data-theme="light"] .status-pulse, [data-theme="light"] .live-dot { box-shadow: 0 0 0 3px rgba(90,140,30,.18); }
 .translation-hint { font-size: 10px; line-height: 1.5; color: #9da4a6; margin: 0 0 10px; }
 [data-theme="light"] .translation-hint { color: #7a7150; }
+
+/* Nome do projeto editável na barra superior */
+.project-name-input { background: transparent; border: 1px solid transparent; border-radius: 6px; color: #eef0ea; font: 600 12px 'DM Sans'; padding: 3px 6px; width: 200px; outline: none; }
+.project-name-input::placeholder { color: #9da4a6; opacity: 1; }
+.project-name-input:hover, .project-name-input:focus { border-color: rgba(184,255,61,.35); background: rgba(255,255,255,.05); }
+[data-theme="light"] .project-name-input { color: #241f0c; }
+[data-theme="light"] .project-name-input::placeholder { color: #958c68; }
+[data-theme="light"] .project-name-input:hover, [data-theme="light"] .project-name-input:focus { background: #fffdf3; border-color: rgba(90,140,30,.45); }
