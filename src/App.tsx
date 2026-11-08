@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import * as THREE from "three";
 import {
   AlignCenter,
@@ -111,7 +111,7 @@ type McpServer = {
   scope: "workspace" | "local";
 };
 
-type ProjectPayload = { pages: Page[]; layers: Omit<Layer, "icon">[]; selectedColor: string; font: string };
+type ProjectPayload = { pages: Page[]; layers: Omit<Layer, "icon">[]; layersByPage?: Record<string, Omit<Layer, "icon">[]>; selectedColor: string; font: string };
 
 type Page = {
   id: string;
@@ -121,6 +121,9 @@ type Page = {
   kind: "home" | "work" | "about";
 };
 
+// Posição e tamanho em porcentagem da área do canvas (0 a 100), para funcionar em qualquer zoom e dispositivo.
+type LayerBox = { x: number; y: number; w: number; h: number };
+
 type Layer = {
   id: string;
   name: string;
@@ -129,6 +132,8 @@ type Layer = {
   locked: boolean;
   detail: string;
   icon: typeof Box;
+  box?: LayerBox;
+  text?: string;
 };
 
 const starterPages: Page[] = [
@@ -138,11 +143,11 @@ const starterPages: Page[] = [
 ];
 
 const starterLayers: Layer[] = [
-  { id: "hero", name: "Hero section", kind: "group", visible: true, locked: false, detail: "Frame · 1440 × 760", icon: BoxSelect },
-  { id: "orb", name: "Orb / interactive", kind: "scene", visible: true, locked: false, detail: "Three.js · mesh", icon: Move3d },
-  { id: "headline", name: "Headline", kind: "text", visible: true, locked: false, detail: "Space Grotesk · 64 px", icon: Type },
-  { id: "cta", name: "CTA button", kind: "button", visible: true, locked: false, detail: "Button · primary", icon: Square },
-  { id: "noise", name: "Noise texture", kind: "image", visible: true, locked: true, detail: "Image · 12% opacity", icon: ImageIcon },
+  { id: "noise", name: "Noise texture", kind: "image", visible: true, locked: true, detail: "Image · 12% opacity", icon: ImageIcon, box: { x: 0, y: 0, w: 100, h: 100 } },
+  { id: "orb", name: "Orb / interactive", kind: "scene", visible: true, locked: false, detail: "Three.js · mesh", icon: Move3d, box: { x: 43, y: 10, w: 52, h: 74 } },
+  { id: "headline", name: "Headline", kind: "text", visible: true, locked: false, detail: "Space Grotesk · 64 px", icon: Type, box: { x: 8.5, y: 19, w: 60, h: 30 } },
+  { id: "cta", name: "CTA button", kind: "button", visible: true, locked: false, detail: "Button · primary", icon: Square, box: { x: 8.5, y: 60, w: 16, h: 6 } },
+  { id: "hero", name: "Hero section", kind: "group", visible: true, locked: false, detail: "Frame · 1440 × 760", icon: BoxSelect, box: { x: 0, y: 0, w: 100, h: 84 } },
 ];
 
 const colorSwatches = ["#b8ff3d", "#ff7a66", "#8f9dff", "#f3f4f0", "#17191f"];
@@ -161,6 +166,21 @@ function hydrateLayers(layers: Layer[]): Layer[] {
 
 function serializableLayers(layers: Layer[]) {
   return layers.map(({ icon: _icon, ...layer }) => layer);
+}
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+// Camadas sem posição salva ganham uma caixa padrão, em cascata.
+function boxOf(layer: Layer, index: number): LayerBox {
+  return layer.box ?? { x: 10 + (index % 6) * 4, y: 10 + (index % 6) * 4, w: 30, h: 12 };
+}
+
+function hydrateLayersByPage(map: Record<string, Layer[]>): Record<string, Layer[]> {
+  return Object.fromEntries(Object.entries(map).map(([pageId, pageLayers]) => [pageId, hydrateLayers(pageLayers)]));
+}
+
+function serializeLayersByPage(map: Record<string, Layer[]>): Record<string, Omit<Layer, "icon">[]> {
+  return Object.fromEntries(Object.entries(map).map(([pageId, pageLayers]) => [pageId, serializableLayers(pageLayers)]));
 }
 
 function isProjectDraft(value: unknown): value is { pages: Page[]; layers: Layer[]; selectedColor?: string; font?: string } {
@@ -338,7 +358,38 @@ function SceneCanvas({ color, active, preview, onSelect }: { color: string; acti
 function App() {
   const [pages, setPages] = useState<Page[]>(starterPages);
   const [activePageId, setActivePageId] = useState("home");
-  const [layers, setLayers] = useState<Layer[]>(starterLayers);
+  // Camadas de cada página. A lista visível (layers) é sempre a da página ativa.
+  const [layersByPage, setLayersByPage] = useState<Record<string, Layer[]>>({});
+  const [undoStack, setUndoStack] = useState<Record<string, Layer[]>[]>([]);
+  const [redoStack, setRedoStack] = useState<Record<string, Layer[]>[]>([]);
+  const layers = layersByPage[activePageId] ?? starterLayers;
+
+  // Toda alteração de camadas passa por aqui e entra no histórico de desfazer.
+  const setLayers = (updater: Layer[] | ((current: Layer[]) => Layer[])) => {
+    setUndoStack((stack) => [...stack.slice(-49), layersByPage]);
+    setRedoStack([]);
+    setLayersByPage((prev) => {
+      const current = prev[activePageId] ?? starterLayers;
+      const next = typeof updater === "function" ? updater(current) : updater;
+      return { ...prev, [activePageId]: next };
+    });
+  };
+
+  const undo = () => {
+    const previous = undoStack[undoStack.length - 1];
+    if (!previous) return notify("Nada para desfazer");
+    setUndoStack((stack) => stack.slice(0, -1));
+    setRedoStack((stack) => [...stack, layersByPage]);
+    setLayersByPage(previous);
+  };
+
+  const redo = () => {
+    const next = redoStack[redoStack.length - 1];
+    if (!next) return notify("Nada para refazer");
+    setRedoStack((stack) => stack.slice(0, -1));
+    setUndoStack((stack) => [...stack, layersByPage]);
+    setLayersByPage(next);
+  };
   const [selectedLayerId, setSelectedLayerId] = useState("orb");
   const [activeInspector, setActiveInspector] = useState<InspectorTab>("design");
   const [activeSide, setActiveSide] = useState<"pages" | "layers">("pages");
@@ -414,6 +465,7 @@ function App() {
           const project = (await loadCloudProject()) as Partial<ProjectPayload> | null;
           if (project?.pages?.length) setPages(project.pages);
           if (project?.layers?.length) setLayers(hydrateLayers(project.layers as Layer[]));
+          if (project?.layersByPage) setLayersByPage(hydrateLayersByPage(project.layersByPage as Record<string, Layer[]>));
           if (project?.selectedColor) setSelectedColor(project.selectedColor);
           if (project?.font) setFont(project.font);
         }
@@ -439,7 +491,7 @@ function App() {
   }, []);
 
   const saveProject = async (nextPayload?: ProjectPayload) => {
-    const payload = nextPayload ?? { pages, layers: serializableLayers(layers), selectedColor, font };
+    const payload = nextPayload ?? { pages, layers: serializableLayers(layers), layersByPage: serializeLayersByPage(layersByPage), selectedColor, font };
     const draftKey = authUser ? `siteforge-project:${authUser.id}` : "siteforge-project:anonymous";
     localStorage.setItem(draftKey, JSON.stringify(payload));
     if (!authUser) {
@@ -467,6 +519,8 @@ function App() {
       if (!isProjectDraft(value)) throw new Error("invalid_local_draft");
       if (value.pages.length) setPages(value.pages);
       if (value.layers.length) setLayers(hydrateLayers(value.layers));
+      const savedByPage = (value as unknown as { layersByPage?: Record<string, Layer[]> }).layersByPage;
+      if (savedByPage) setLayersByPage(hydrateLayersByPage(savedByPage));
       if (value.selectedColor) setSelectedColor(value.selectedColor);
       if (value.font) setFont(value.font);
     } catch {
@@ -504,7 +558,9 @@ function App() {
   const createProject = () => {
     const nextPayload: ProjectPayload = { pages: starterPages, layers: serializableLayers(starterLayers), selectedColor: "#b8ff3d", font: "Space Grotesk" };
     setPages(starterPages);
-    setLayers(starterLayers);
+    setLayersByPage({});
+    setUndoStack([]);
+    setRedoStack([]);
     setSelectedLayerId("orb");
     setSelectedColor("#b8ff3d");
     setFont("Space Grotesk");
@@ -537,6 +593,94 @@ function App() {
     setSelectedLayerId(layer.id);
     notify(`${name} inserido no canvas`);
   };
+
+  const chosenLayer = layers.find((layer) => layer.id === selectedLayerId);
+
+  const deleteSelectedLayer = () => {
+    if (!chosenLayer) return;
+    if (chosenLayer.locked) return notify("Desbloqueie a layer antes de removê-la");
+    setLayers((current) => current.filter((layer) => layer.id !== chosenLayer.id));
+    setSelectedLayerId("");
+    notify("Layer removida");
+  };
+
+  const duplicateLayer = () => {
+    if (!chosenLayer) return;
+    const box = boxOf(chosenLayer, layers.indexOf(chosenLayer));
+    const copy: Layer = {
+      ...chosenLayer,
+      id: `${chosenLayer.kind}-${Date.now()}`,
+      name: `${chosenLayer.name} copy`,
+      locked: false,
+      box: { ...box, x: clamp(box.x + 3, 0, 100 - box.w), y: clamp(box.y + 3, 0, 100 - box.h) },
+    };
+    setLayers((current) => [copy, ...current]);
+    setSelectedLayerId(copy.id);
+    notify("Layer duplicada");
+  };
+
+  // Arrastar move a camada; a alça do canto redimensiona. O histórico é gravado uma vez por gesto.
+  const beginLayerPointer = (event: ReactPointerEvent<HTMLElement>, layer: Layer, index: number, mode: "move" | "resize") => {
+    event.stopPropagation();
+    setSelectedLayerId(layer.id);
+    if (layer.locked) return;
+    const surface = event.currentTarget.closest(".artboard-shell") as HTMLElement | null;
+    if (!surface) return;
+    const rect = surface.getBoundingClientRect();
+    const start = { x: event.clientX, y: event.clientY };
+    const origin = boxOf(layer, index);
+    const pageId = activePageId;
+    const snapshot = layersByPage;
+    let committed = false;
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (!committed) {
+        committed = true;
+        setUndoStack((stack) => [...stack.slice(-49), snapshot]);
+        setRedoStack([]);
+      }
+      const dx = ((moveEvent.clientX - start.x) / rect.width) * 100;
+      const dy = ((moveEvent.clientY - start.y) / rect.height) * 100;
+      const next: LayerBox = mode === "move"
+        ? { ...origin, x: clamp(origin.x + dx, 0, 100 - origin.w), y: clamp(origin.y + dy, 0, 100 - origin.h) }
+        : { ...origin, w: clamp(origin.w + dx, 4, 100 - origin.x), h: clamp(origin.h + dy, 3, 100 - origin.y) };
+      setLayersByPage((prev) => ({
+        ...prev,
+        [pageId]: (prev[pageId] ?? starterLayers).map((item) => (item.id === layer.id ? { ...item, box: next } : item)),
+      }));
+    };
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  };
+
+  // Atalhos: desfazer, refazer, duplicar e excluir. Ignorados quando o foco está em um campo de texto.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+      const mod = event.metaKey || event.ctrlKey;
+      const key = event.key.toLowerCase();
+      if (mod && key === "z" && !event.shiftKey) {
+        event.preventDefault();
+        undo();
+      } else if (mod && ((key === "z" && event.shiftKey) || key === "y")) {
+        event.preventDefault();
+        redo();
+      } else if (mod && key === "d") {
+        event.preventDefault();
+        duplicateLayer();
+      } else if ((event.key === "Delete" || event.key === "Backspace") && chosenLayer) {
+        event.preventDefault();
+        deleteSelectedLayer();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const updateLayer = (id: string, changes: Partial<Layer>) => {
     setLayers((current) => current.map((layer) => layer.id === id ? { ...layer, ...changes } : layer));
@@ -598,8 +742,8 @@ function App() {
         </div>
         <div className="project-meta"><span className="status-pulse" /> <strong>Untitled project</strong><span className="meta-divider" /> <span className="muted">Saved 2 min ago</span></div>
         <div className="top-actions">
-          <button className="icon-button subtle" aria-label="Desfazer"><Undo2 size={15} /></button>
-          <button className="icon-button subtle" aria-label="Refazer"><Redo2 size={15} /></button>
+          <button className="icon-button subtle" aria-label="Desfazer" onClick={undo} disabled={undoStack.length === 0}><Undo2 size={15} /></button>
+          <button className="icon-button subtle" aria-label="Refazer" onClick={redo} disabled={redoStack.length === 0}><Redo2 size={15} /></button>
           <span className="top-divider" />
           <LanguageSelect value={language} onChange={setLanguage} />
           <button className="icon-button subtle" aria-label="Alternar tema" onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
@@ -654,12 +798,34 @@ function App() {
             <div className="canvas-topline"><span><span className="canvas-dot" /> {activePage?.name} <span className="muted">/ {activePage?.path}</span></span><span className="canvas-coordinates">x: 0 · y: 0 <span className="muted">·</span> 1440 × 900</span></div>
             <div className={`artboard-shell device-${device}`} style={{ transform: `scale(${zoom / 100})` }}>
               <div className="artboard-grid" />
-              <div className="artboard-copy" style={{ fontFamily: font }}><span className="art-eyebrow">{pageContent.eyebrow}</span><h1>{pageContent.first}<br /><em>{pageContent.second}</em></h1><p>{pageContent.description.split("\n").map((line) => <span key={line}>{line}<br /></span>)}</p><button className="art-cta">Explore the system <ArrowRight size={14} /></button></div>
-              {sceneLayer?.visible !== false && <SceneCanvas color={selectedColor} active={selectedLayer?.kind === "scene"} preview={preview} onSelect={() => sceneLayer?.locked ? notify("A layer 3D está bloqueada") : setSelectedLayerId("orb")} />}
+              <div className="edit-surface" onPointerDown={() => { if (!preview) setSelectedLayerId(""); }}>
+                {layers.map((layer, index) => ({ layer, index })).reverse().map(({ layer, index }) => {
+                  const box = boxOf(layer, index);
+                  const selected = !preview && layer.id === selectedLayerId;
+                  return (
+                    <div
+                      key={layer.id}
+                      className={`edit-layer edit-${layer.kind}${selected ? " is-selected" : ""}${layer.locked ? " is-locked" : ""}`}
+                      style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, zIndex: layers.length - index, display: layer.visible ? undefined : "none" }}
+                      onPointerDown={preview ? undefined : (event) => beginLayerPointer(event, layer, index, "move")}
+                    >
+                      {layer.kind === "scene" ? (
+                        <SceneCanvas color={selectedColor} active={selected} preview={preview} onSelect={() => setSelectedLayerId(layer.id)} />
+                      ) : layer.kind === "text" ? (
+                        <p className="edit-text" style={{ fontFamily: font }}>{layer.id === "headline" && !layer.text ? `${pageContent.first} ${pageContent.second}` : layer.text ?? layer.name}</p>
+                      ) : layer.kind === "button" ? (
+                        <span className="art-cta">{layer.text ?? "Explore the system"}</span>
+                      ) : layer.kind === "image" ? (
+                        <div className="edit-image" />
+                      ) : (
+                        <span className="edit-frame-label">{preview ? "" : layer.name}</span>
+                      )}
+                      {selected && !layer.locked && <span className="edit-handle" onPointerDown={(event) => beginLayerPointer(event, layer, index, "resize")} />}
+                    </div>
+                  );
+                })}
+              </div>
               <div className="art-footer"><span>Scroll to explore</span><span className="footer-line" /><span>01 / 04</span></div>
-              <div className="selection-box selection-box-large"><span className="selection-label">Hero section · frame</span><i /><i /><i /><i /></div>
-              <div className="cursor-label cursor-a"><span className="cursor-dot" /> You</div>
-              <div className="cursor-label cursor-b"><span className="cursor-dot purple" /> Alex</div>
             </div>
             <div className="canvas-bottomline"><div className="canvas-hint"><span className="key-hint">Space</span> to pan <span className="key-hint">⌘</span><span className="key-hint">+</span><span className="key-hint">K</span> quick actions</div><div className="canvas-info"><span><span className="live-dot" /> Live sync</span><span>Updated just now</span></div></div>
           </div>
