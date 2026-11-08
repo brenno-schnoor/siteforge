@@ -91,16 +91,15 @@ const uiCopy: Record<Language, { editor: string; projects: string; preview: stri
   es: { editor: "Editor", projects: "Proyectos", preview: "Vista previa", backToEdit: "Volver a editar", publish: "Publicar", saving: "Guardando", saved: "Guardado ahora", pages: "Páginas", layers: "Capas", addPage: "Añadir página", openEditor: "Abrir editor", newProject: "Nuevo proyecto", signOut: "Cerrar sesión", language: "Idioma", workspace: "espacio de trabajo", cloudSync: "Sincronización en la nube activa", lastEdited: "Editado ahora", visualSystem: "Sistema web visual", blankCanvas: "Empieza con una pantalla en blanco", backToSite: "Volver a SiteForge", membersOnly: "Espacio exclusivo para miembros", buildA: "Construye desde un", buildB: "punto de vista.", loginDescription: "Inicia sesión para crear sitios, editar páginas, guardar proyectos y conectar herramientas MCP.", continueGoogle: "Continuar con Google",  },
 };
 
-function SiteLanguageSwitch({ codes, value, preview, onChange, style }: { codes: string[]; value: string; preview: boolean; onChange: (code: string) => void; style: "select" | "buttons" }) {
+function SiteLanguageSwitch({ codes, value, onChange, style }: { codes: string[]; value: string; onChange: (code: string) => void; style: "select" | "buttons" }) {
   const list = codes.length ? codes : ["pt"];
   const current = list.includes(value) ? value : list[0];
+  // Impede que o clique no seletor arraste a camada no editor.
+  const stop = (event: ReactPointerEvent) => event.stopPropagation();
   if (style === "buttons") {
-    return <div className="site-lang-buttons" role="group" aria-label="Idioma">{list.map((code) => preview
-      ? <button key={code} type="button" className={code === current ? "active" : ""} aria-pressed={code === current} onClick={() => onChange(code)}>{siteLanguages[code]}</button>
-      : <span key={code} className={code === current ? "active" : ""}>{siteLanguages[code]}</span>)}</div>;
+    return <div className="site-lang-buttons" role="group" aria-label="Idioma" onPointerDown={stop}>{list.map((code) => <button key={code} type="button" className={code === current ? "active" : ""} aria-pressed={code === current} onClick={() => onChange(code)}>{siteLanguages[code]}</button>)}</div>;
   }
-  if (!preview) return <div className="site-lang edit-lang"><Languages size={12} /> {list.map((code) => siteLanguages[code]).join(" · ")}</div>;
-  return <select className="site-lang" aria-label="Idioma" value={list.includes(value) ? value : list[0]} onChange={(event) => onChange(event.target.value)}>{list.map((code) => <option key={code} value={code}>{siteLanguages[code]}</option>)}</select>;
+  return <select className="site-lang" aria-label="Idioma" value={current} onPointerDown={stop} onChange={(event) => onChange(event.target.value)}>{list.map((code) => <option key={code} value={code}>{siteLanguages[code]}</option>)}</select>;
 }
 
 const editorCopy: Record<Language, Record<"untitled" | "saved" | "cloud" | "local" | "structure" | "layersCount" | "select" | "frame" | "type" | "media" | "threeD" | "desktop" | "tablet" | "mobile" | "addNewPage" | "undo" | "redo" | "theme" | "open" | "tip" | "pageNamed" | "back" | "search", string>> = {
@@ -503,7 +502,7 @@ function App() {
   const [zoom, setZoom] = useState(82);
   const [showGrid, setShowGrid] = useState(false);
   const [siteLang, setSiteLang] = useState("pt");
-  const shownText = (layer: Layer, fallback: string) => (preview && layer.translations?.[siteLang]) || fallback;
+  const shownText = (layer: Layer, fallback: string) => layer.translations?.[siteLang] || fallback;
   const siteLanguageCodes = layers.find((layer) => layer.kind === "language")?.languages ?? [];
   const [showMenu, setShowMenu] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem("siteforge-theme") as Theme) || "dark");
@@ -1088,7 +1087,7 @@ function App() {
                           onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
                         >{shownText(layer, layer.text ?? "Explore the system")}</span>
                       ) : layer.kind === "language" ? (
-                        <SiteLanguageSwitch codes={layer.languages ?? ["pt", "en"]} value={siteLang} preview={preview} onChange={setSiteLang} style={layer.languageStyle ?? "select"} />
+                        <SiteLanguageSwitch codes={layer.languages ?? ["pt", "en"]} value={siteLang} onChange={setSiteLang} style={layer.languageStyle ?? "select"} />
                       ) : layer.kind === "image" ? (
                         <div className="edit-image" style={layer.src ? { backgroundImage: `url(${layer.src})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
                       ) : (
