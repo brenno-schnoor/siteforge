@@ -335,3 +335,13 @@ kbd { font-family: 'Space Grotesk'; border: 1px solid rgba(255,255,255,.12); bor
 .palette-list button { display: flex; gap: 10px; align-items: center; text-align: left; padding: 8px; border-radius: 6px; color: #d9dfd6; font-size: 12px; }
 .palette-list button:hover { background: #1d2029; }
 .palette-list span { font-size: 9px; text-transform: uppercase; letter-spacing: .1em; color: var(--lime); min-width: 56px; }
+
+/* Ajustes de UI: botões sem fundo padrão do navegador e grade opcional */
+.page-move, .page-copy, .page-more, .layer-action, .icon-button, .palette-list button, .palette-list button span { background: transparent; border: 0; }
+.page-move { width: 18px; height: 16px; padding: 0; }
+.page-move:hover { background: rgba(184, 255, 61, .12); }
+.palette-list button { width: 100%; background: transparent; color: #d9dfd6; cursor: pointer; }
+.palette-list button:hover, .palette-list button:focus-visible { background: #1d2029; outline: none; }
+.palette-list span { background: none; }
+.icon-button.active { color: var(--lime); }
+.canvas-wrap.show-grid .edit-surface { background-image: linear-gradient(rgba(255, 255, 255, .06) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .06) 1px, transparent 1px); background-size: 5% 10%; }
