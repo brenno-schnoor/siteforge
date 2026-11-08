@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
-import { appPath, url } from "./paths";
   AlignCenter,
   ArrowDown,
   ArrowLeft,
