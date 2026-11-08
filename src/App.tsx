@@ -55,6 +55,7 @@ import {
   Zap,
 } from "lucide-react";
 import { appPath, url } from "./paths";
+import { beginGoogleLogin, getCurrentUser, loadCloudProject, saveCloudProject, signOutCloud } from "./supabase";
 
 type Device = "desktop" | "tablet" | "mobile";
 type InspectorTab = "design" | "animate";
@@ -397,18 +398,14 @@ function App() {
   useEffect(() => {
     const loadAccount = async () => {
       try {
-        const meResponse = await fetch(url("/api/me"));
-        const meData = await meResponse.json();
-        if (meData.user) {
-          setAuthUser(meData.user);
-          const projectResponse = await fetch(url("/api/project"));
-          if (projectResponse.ok) {
-            const projectData = await projectResponse.json();
-            if (projectData.project?.pages?.length) setPages(projectData.project.pages);
-            if (projectData.project?.layers?.length) setLayers(hydrateLayers(projectData.project.layers));
-            if (projectData.project?.selectedColor) setSelectedColor(projectData.project.selectedColor);
-            if (projectData.project?.font) setFont(projectData.project.font);
-          }
+        const user = await getCurrentUser();
+        if (user) {
+          setAuthUser(user);
+          const project = (await loadCloudProject()) as Partial<ProjectPayload> | null;
+          if (project?.pages?.length) setPages(project.pages);
+          if (project?.layers?.length) setLayers(hydrateLayers(project.layers));
+          if (project?.selectedColor) setSelectedColor(project.selectedColor);
+          if (project?.font) setFont(project.font);
         }
       } catch {
         // A sessão indisponível mantém o workspace bloqueado até o login real.
@@ -441,8 +438,7 @@ function App() {
     }
     setSaving(true);
     try {
-      const response = await fetch(url("/api/project"), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
-      if (!response.ok) throw new Error("project_sync_failed");
+      await saveCloudProject(payload);
       notify("Projeto sincronizado com sua conta");
     } catch {
       notify("Salvo localmente · sincronização indisponível");
@@ -548,11 +544,11 @@ function App() {
   };
 
   const beginLogin = () => {
-    window.location.href = url("/api/auth/login");
+    beginGoogleLogin();
   };
 
   const logout = async () => {
-    await fetch(url("/api/auth/logout"), { method: "POST" });
+    await signOutCloud();
     setAuthUser(null);
     setAuthOpen(false);
     notify("Sessão encerrada");
