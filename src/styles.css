@@ -295,3 +295,13 @@ kbd { font-family: 'Space Grotesk'; border: 1px solid rgba(255,255,255,.12); bor
 .edit-frame-label { position: absolute; left: 8px; top: 8px; font-size: 9px; color: #9da4a6; pointer-events: none; }
 .edit-button .art-cta { position: absolute; inset: 0; width: 100%; height: 100%; justify-content: center; }
 .edit-scene .scene-canvas { position: absolute; inset: 0; width: 100%; height: 100%; top: auto; right: auto; }
+
+/* Editor etapa 2: guias de alinhamento, barra de alinhar e edição de texto no canvas. */
+.snap-guide { position: absolute; background: #ff4fd8; pointer-events: none; z-index: 50; }
+.snap-guide-v { top: 0; bottom: 0; width: 1px; }
+.snap-guide-h { left: 0; right: 0; height: 1px; }
+.align-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 0; }
+.align-bar button { font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, .12); background: #1d2029; color: #d9dfd6; }
+.align-bar button:disabled { opacity: .4; cursor: default; }
+.align-bar button:not(:disabled):hover { border-color: var(--lime); color: var(--lime); }
+.edit-layer.is-selected[contenteditable="true"] { outline-color: var(--lime); cursor: text; }

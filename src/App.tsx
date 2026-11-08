@@ -170,6 +170,20 @@ function serializableLayers(layers: Layer[]) {
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+// Distância (em % da área) abaixo da qual a camada "gruda" numa guia.
+const SNAP_DISTANCE = 0.6;
+
+function nearestSnap(candidates: number[], targets: number[]): { diff: number; target: number } | null {
+  let best: { diff: number; target: number } | null = null;
+  for (const candidate of candidates) {
+    for (const target of targets) {
+      const diff = target - candidate;
+      if (Math.abs(diff) <= SNAP_DISTANCE && (!best || Math.abs(diff) < Math.abs(best.diff))) best = { diff, target };
+    }
+  }
+  return best;
+}
+
 // Camadas sem posição salva ganham uma caixa padrão, em cascata.
 function boxOf(layer: Layer, index: number): LayerBox {
   return layer.box ?? { x: 10 + (index % 6) * 4, y: 10 + (index % 6) * 4, w: 30, h: 12 };
@@ -391,6 +405,9 @@ function App() {
     setLayersByPage(next);
   };
   const [selectedLayerId, setSelectedLayerId] = useState("orb");
+  const [extraSelected, setExtraSelected] = useState<string[]>([]);
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null);
+  const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
   const [activeInspector, setActiveInspector] = useState<InspectorTab>("design");
   const [activeSide, setActiveSide] = useState<"pages" | "layers">("pages");
   const [device, setDevice] = useState<Device>("desktop");
@@ -596,6 +613,58 @@ function App() {
 
   const chosenLayer = layers.find((layer) => layer.id === selectedLayerId);
 
+  // Alinha as camadas selecionadas entre si; com uma só, alinha à área do canvas.
+  const alignSelection = (action: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom") => {
+    const ids = [selectedLayerId, ...extraSelected].filter(Boolean);
+    const targets = layers.map((item, index) => ({ item, box: boxOf(item, index) })).filter(({ item }) => ids.includes(item.id) && !item.locked);
+    if (!targets.length) return notify("Selecione uma camada para alinhar");
+    const bounds = targets.length > 1
+      ? { minX: Math.min(...targets.map(({ box }) => box.x)), maxX: Math.max(...targets.map(({ box }) => box.x + box.w)), minY: Math.min(...targets.map(({ box }) => box.y)), maxY: Math.max(...targets.map(({ box }) => box.y + box.h)) }
+      : { minX: 0, maxX: 100, minY: 0, maxY: 100 };
+    const placed = new Map<string, LayerBox>();
+    for (const { item, box } of targets) {
+      let { x, y } = box;
+      if (action === "left") x = bounds.minX;
+      if (action === "right") x = bounds.maxX - box.w;
+      if (action === "hcenter") x = (bounds.minX + bounds.maxX) / 2 - box.w / 2;
+      if (action === "top") y = bounds.minY;
+      if (action === "bottom") y = bounds.maxY - box.h;
+      if (action === "vcenter") y = (bounds.minY + bounds.maxY) / 2 - box.h / 2;
+      placed.set(item.id, { ...box, x, y });
+    }
+    setLayers((current) => current.map((item, index) => (placed.has(item.id) ? { ...item, box: placed.get(item.id) } : item)));
+  };
+
+  // Distribui três ou mais camadas com espaços iguais, na horizontal ou na vertical.
+  const distributeSelection = (axis: "x" | "y") => {
+    const ids = [selectedLayerId, ...extraSelected].filter(Boolean);
+    const targets = layers.map((item, index) => ({ item, box: boxOf(item, index) })).filter(({ item }) => ids.includes(item.id) && !item.locked);
+    if (targets.length < 3) return notify("Selecione pelo menos três camadas para distribuir");
+    const sorted = [...targets].sort((a, b) => (axis === "x" ? a.box.x - b.box.x : a.box.y - b.box.y));
+    const size = (box: LayerBox) => (axis === "x" ? box.w : box.h);
+    const start = axis === "x" ? sorted[0].box.x : sorted[0].box.y;
+    const last = sorted[sorted.length - 1].box;
+    const end = (axis === "x" ? last.x : last.y) + size(last);
+    const totalSize = sorted.reduce((sum, { box }) => sum + size(box), 0);
+    const gap = (end - start - totalSize) / (sorted.length - 1);
+    const placed = new Map<string, number>();
+    let cursor = start;
+    for (const { item, box } of sorted) {
+      placed.set(item.id, cursor);
+      cursor += size(box) + gap;
+    }
+    setLayers((current) => current.map((item, index) => {
+      if (!placed.has(item.id)) return item;
+      const box = boxOf(item, index);
+      return { ...item, box: axis === "x" ? { ...box, x: placed.get(item.id) as number } : { ...box, y: placed.get(item.id) as number } };
+    }));
+  };
+
+  const finishEditing = (id: string, text: string) => {
+    setEditingLayerId(null);
+    updateLayer(id, { text: text.trim() ? text : undefined });
+  };
+
   const deleteSelectedLayer = () => {
     if (!chosenLayer) return;
     if (chosenLayer.locked) return notify("Desbloqueie a layer antes de removê-la");
@@ -622,6 +691,11 @@ function App() {
   // Arrastar move a camada; a alça do canto redimensiona. O histórico é gravado uma vez por gesto.
   const beginLayerPointer = (event: ReactPointerEvent<HTMLElement>, layer: Layer, index: number, mode: "move" | "resize") => {
     event.stopPropagation();
+    if (event.shiftKey && mode === "move") {
+      setExtraSelected((list) => (list.includes(layer.id) ? list.filter((id) => id !== layer.id) : [...list, layer.id]));
+      return;
+    }
+    if (!extraSelected.includes(layer.id)) setExtraSelected([]);
     setSelectedLayerId(layer.id);
     if (layer.locked) return;
     const surface = event.currentTarget.closest(".artboard-shell") as HTMLElement | null;
@@ -641,15 +715,26 @@ function App() {
       }
       const dx = ((moveEvent.clientX - start.x) / rect.width) * 100;
       const dy = ((moveEvent.clientY - start.y) / rect.height) * 100;
-      const next: LayerBox = mode === "move"
+      const others = layers.filter((item) => item.id !== layer.id && item.visible).map((item) => boxOf(item, layers.indexOf(item)));
+      const xTargets = [0, 50, 100, ...others.flatMap((b) => [b.x, b.x + b.w / 2, b.x + b.w])];
+      const yTargets = [0, 50, 100, ...others.flatMap((b) => [b.y, b.y + b.h / 2, b.y + b.h])];
+      let next: LayerBox = mode === "move"
         ? { ...origin, x: clamp(origin.x + dx, 0, 100 - origin.w), y: clamp(origin.y + dy, 0, 100 - origin.h) }
         : { ...origin, w: clamp(origin.w + dx, 4, 100 - origin.x), h: clamp(origin.h + dy, 3, 100 - origin.y) };
+      const xCandidates = mode === "move" ? [next.x, next.x + next.w / 2, next.x + next.w] : [next.x + next.w];
+      const yCandidates = mode === "move" ? [next.y, next.y + next.h / 2, next.y + next.h] : [next.y + next.h];
+      const snapX = nearestSnap(xCandidates, xTargets);
+      const snapY = nearestSnap(yCandidates, yTargets);
+      if (snapX) next = mode === "move" ? { ...next, x: next.x + snapX.diff } : { ...next, w: next.w + snapX.diff };
+      if (snapY) next = mode === "move" ? { ...next, y: next.y + snapY.diff } : { ...next, h: next.h + snapY.diff };
+      setGuides({ x: snapX ? [snapX.target] : [], y: snapY ? [snapY.target] : [] });
       setLayersByPage((prev) => ({
         ...prev,
         [pageId]: (prev[pageId] ?? starterLayers).map((item) => (item.id === layer.id ? { ...item, box: next } : item)),
       }));
     };
     const onUp = () => {
+      setGuides({ x: [], y: [] });
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
@@ -796,25 +881,52 @@ function App() {
           </div>
           <div className="canvas-wrap">
             <div className="canvas-topline"><span><span className="canvas-dot" /> {activePage?.name} <span className="muted">/ {activePage?.path}</span></span><span className="canvas-coordinates">x: 0 · y: 0 <span className="muted">·</span> 1440 × 900</span></div>
+            <div className="align-bar" role="toolbar" aria-label="Alinhar">
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("left")}>Esquerda</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("hcenter")}>Centro H</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("right")}>Direita</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("top")}>Topo</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("vcenter")}>Meio V</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("bottom")}>Base</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => distributeSelection("x")}>Distribuir H</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => distributeSelection("y")}>Distribuir V</button>
+            </div>
             <div className={`artboard-shell device-${device}`} style={{ transform: `scale(${zoom / 100})` }}>
               <div className="artboard-grid" />
-              <div className="edit-surface" onPointerDown={() => { if (!preview) setSelectedLayerId(""); }}>
+              <div className="edit-surface" onPointerDown={() => { if (!preview && editingLayerId === null) { setSelectedLayerId(""); setExtraSelected([]); } }}>
                 {layers.map((layer, index) => ({ layer, index })).reverse().map(({ layer, index }) => {
                   const box = boxOf(layer, index);
-                  const selected = !preview && layer.id === selectedLayerId;
+                  const selected = !preview && (layer.id === selectedLayerId || extraSelected.includes(layer.id));
+                  const editing = editingLayerId === layer.id;
                   return (
                     <div
                       key={layer.id}
                       className={`edit-layer edit-${layer.kind}${selected ? " is-selected" : ""}${layer.locked ? " is-locked" : ""}`}
                       style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, zIndex: layers.length - index, display: layer.visible ? undefined : "none" }}
-                      onPointerDown={preview ? undefined : (event) => beginLayerPointer(event, layer, index, "move")}
+                      onPointerDown={preview || editing ? undefined : (event) => beginLayerPointer(event, layer, index, "move")}
+                      onDoubleClick={preview || layer.locked || (layer.kind !== "text" && layer.kind !== "button") ? undefined : () => setEditingLayerId(layer.id)}
                     >
                       {layer.kind === "scene" ? (
                         <SceneCanvas color={selectedColor} active={selected} preview={preview} onSelect={() => setSelectedLayerId(layer.id)} />
                       ) : layer.kind === "text" ? (
-                        <p className="edit-text" style={{ fontFamily: font }}>{layer.id === "headline" && !layer.text ? `${pageContent.first} ${pageContent.second}` : layer.text ?? layer.name}</p>
+                        <p
+                          className="edit-text"
+                          style={{ fontFamily: font }}
+                          contentEditable={editing}
+                          suppressContentEditableWarning
+                          ref={(el) => { if (el && editing) el.focus(); }}
+                          onBlur={editing ? (event) => finishEditing(layer.id, event.currentTarget.innerText) : undefined}
+                          onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
+                        >{layer.id === "headline" && !layer.text ? `${pageContent.first} ${pageContent.second}` : layer.text ?? layer.name}</p>
                       ) : layer.kind === "button" ? (
-                        <span className="art-cta">{layer.text ?? "Explore the system"}</span>
+                        <span
+                          className="art-cta"
+                          contentEditable={editing}
+                          suppressContentEditableWarning
+                          ref={(el) => { if (el && editing) el.focus(); }}
+                          onBlur={editing ? (event) => finishEditing(layer.id, event.currentTarget.innerText) : undefined}
+                          onKeyDown={editing ? (event) => { if (event.key === "Escape") event.currentTarget.blur(); } : undefined}
+                        >{layer.text ?? "Explore the system"}</span>
                       ) : layer.kind === "image" ? (
                         <div className="edit-image" />
                       ) : (
@@ -824,6 +936,8 @@ function App() {
                     </div>
                   );
                 })}
+                {guides.x.map((x) => <div key={`gx-${x}`} className="snap-guide snap-guide-v" style={{ left: `${x}%` }} />)}
+                {guides.y.map((y) => <div key={`gy-${y}`} className="snap-guide snap-guide-h" style={{ top: `${y}%` }} />)}
               </div>
               <div className="art-footer"><span>Scroll to explore</span><span className="footer-line" /><span>01 / 04</span></div>
             </div>
