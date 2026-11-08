@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import {
+import { appPath, url } from "./paths";
   AlignCenter,
   ArrowDown,
   ArrowLeft,
@@ -331,8 +332,8 @@ function App() {
   const [activeInspector, setActiveInspector] = useState<InspectorTab>("design");
   const [activeSide, setActiveSide] = useState<"pages" | "layers">("pages");
   const [device, setDevice] = useState<Device>("desktop");
-  const [routePath, setRoutePath] = useState(() => window.location.pathname.replace(/\/+$/, "") || "/editor");
-  const [preview, setPreview] = useState(() => (window.location.pathname.replace(/\/+$/, "") || "/") === "/preview");
+  const [routePath, setRoutePath] = useState(() => appPath() || "/editor");
+  const [preview, setPreview] = useState(() => appPath() === "/preview");
   const [selectedColor, setSelectedColor] = useState("#b8ff3d");
   const [font, setFont] = useState("Space Grotesk");
   const [toast, setToast] = useState("");
@@ -369,7 +370,7 @@ function App() {
 
   useEffect(() => {
     const syncRoute = () => {
-      const path = window.location.pathname.replace(/\/+$/, "") || "/";
+      const path = appPath();
       setRoutePath(path);
       const page = pages.find((item) => item.path === path);
       if (page) setActivePageId(page.id);
@@ -396,11 +397,11 @@ function App() {
   useEffect(() => {
     const loadAccount = async () => {
       try {
-        const meResponse = await fetch("/api/me");
+        const meResponse = await fetch(url("/api/me"));
         const meData = await meResponse.json();
         if (meData.user) {
           setAuthUser(meData.user);
-          const projectResponse = await fetch("/api/project");
+          const projectResponse = await fetch(url("/api/project"));
           if (projectResponse.ok) {
             const projectData = await projectResponse.json();
             if (projectData.project?.pages?.length) setPages(projectData.project.pages);
@@ -440,7 +441,7 @@ function App() {
     }
     setSaving(true);
     try {
-      const response = await fetch("/api/project", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const response = await fetch(url("/api/project"), { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
       if (!response.ok) throw new Error("project_sync_failed");
       notify("Projeto sincronizado com sua conta");
     } catch {
@@ -477,19 +478,19 @@ function App() {
 
   const selectPage = (page: Page) => {
     setActivePageId(page.id);
-    window.history.pushState({}, "", page.path);
+    window.history.pushState({}, "", url(page.path));
     setRoutePath(page.path);
     setPreview(false);
   };
 
   const openProjects = () => {
-    window.history.pushState({}, "", "/projects");
+    window.history.pushState({}, "", url("/projects"));
     setRoutePath("/projects");
     setPreview(false);
   };
 
   const openEditor = (path = activePage?.path || "/editor") => {
-    window.history.pushState({}, "", path);
+    window.history.pushState({}, "", url(path));
     setRoutePath(path);
     setPreview(path === "/preview");
   };
@@ -547,11 +548,11 @@ function App() {
   };
 
   const beginLogin = () => {
-    window.location.href = "/api/auth/login";
+    window.location.href = url("/api/auth/login");
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await fetch(url("/api/auth/logout"), { method: "POST" });
     setAuthUser(null);
     setAuthOpen(false);
     notify("Sessão encerrada");
@@ -563,7 +564,7 @@ function App() {
       return;
     }
     try {
-      const response = await fetch("/api/integrations");
+      const response = await fetch(url("/api/integrations"));
       const data = await response.json();
       setIntegrations(data.integrations || []);
       setIntegrationsOpen(true);
@@ -692,7 +693,7 @@ function ProjectsScreen({ user, pages, language, onLanguageChange, onOpenEditor,
   const ui = uiCopy[language];
   const title = language === "pt" ? "Dê forma às suas ideias." : language === "es" ? "Dale forma a tus ideas." : "Shape your ideas.";
   const intro = language === "pt" ? "Abra um projeto existente ou comece uma nova superfície visual." : language === "es" ? "Abre un proyecto existente o empieza una nueva superficie visual." : "Open an existing project or start a new visual surface.";
-  return <main className="projects-screen"><header className="projects-topbar"><a className="brand-lockup" href="/"><div className="brand-mark"><span>S</span><span>F</span></div><div><div className="brand-name">siteforge<span>.</span></div><div className="brand-tag">{ui.workspace}</div></div></a><div className="projects-actions"><LanguageSelect value={language} onChange={onLanguageChange} /><button className="projects-account" onClick={onLogout}><span>{(user.name || user.email).slice(0, 2).toUpperCase()}</span>{user.name || user.email}<LogOut size={14} /></button></div></header><section className="projects-content"><div className="projects-heading"><div><span className="eyebrow">{ui.projects} / {ui.workspace}</span><h1>{title}</h1><p>{intro}</p></div><button className="publish-button" onClick={onNewProject}><Plus size={15} /> {ui.newProject}</button></div><div className="projects-toolbar"><span><FolderOpen size={14} /> {pages.length} {ui.pages.toLowerCase()}</span><span className="projects-cloud"><span className="live-dot" /> {ui.cloudSync}</span></div><div className="projects-grid"><article className="project-tile featured" onClick={() => onOpenEditor("/editor")}><div className="project-preview project-preview-orb"><span className="project-preview-kicker">SITEFORGE / 01</span><div className="project-preview-orb-shape" /><span className="project-preview-caption">Design<br /><em>in motion.</em></span></div><div className="project-tile-copy"><div><span className="eyebrow">{ui.lastEdited}</span><h2>{language === "pt" ? "Projeto sem nome" : language === "es" ? "Proyecto sin nombre" : "Untitled project"}</h2><p>{ui.visualSystem} · {pages.length} {ui.pages.toLowerCase()}</p></div><button className="project-open" onClick={(event) => { event.stopPropagation(); onOpenEditor("/editor"); }}>{ui.openEditor} <ArrowRight size={14} /></button></div></article><button className="project-new-tile" onClick={onNewProject}><span className="project-new-icon"><Plus size={20} /></span><strong>{ui.newProject}</strong><span>{ui.blankCanvas}</span></button></div></section></main>;
+  return <main className="projects-screen"><header className="projects-topbar"><a className="brand-lockup" href={url("/")}><div className="brand-mark"><span>S</span><span>F</span></div><div><div className="brand-name">siteforge<span>.</span></div><div className="brand-tag">{ui.workspace}</div></div></a><div className="projects-actions"><LanguageSelect value={language} onChange={onLanguageChange} /><button className="projects-account" onClick={onLogout}><span>{(user.name || user.email).slice(0, 2).toUpperCase()}</span>{user.name || user.email}<LogOut size={14} /></button></div></header><section className="projects-content"><div className="projects-heading"><div><span className="eyebrow">{ui.projects} / {ui.workspace}</span><h1>{title}</h1><p>{intro}</p></div><button className="publish-button" onClick={onNewProject}><Plus size={15} /> {ui.newProject}</button></div><div className="projects-toolbar"><span><FolderOpen size={14} /> {pages.length} {ui.pages.toLowerCase()}</span><span className="projects-cloud"><span className="live-dot" /> {ui.cloudSync}</span></div><div className="projects-grid"><article className="project-tile featured" onClick={() => onOpenEditor("/editor")}><div className="project-preview project-preview-orb"><span className="project-preview-kicker">SITEFORGE / 01</span><div className="project-preview-orb-shape" /><span className="project-preview-caption">Design<br /><em>in motion.</em></span></div><div className="project-tile-copy"><div><span className="eyebrow">{ui.lastEdited}</span><h2>{language === "pt" ? "Projeto sem nome" : language === "es" ? "Proyecto sin nombre" : "Untitled project"}</h2><p>{ui.visualSystem} · {pages.length} {ui.pages.toLowerCase()}</p></div><button className="project-open" onClick={(event) => { event.stopPropagation(); onOpenEditor("/editor"); }}>{ui.openEditor} <ArrowRight size={14} /></button></div></article><button className="project-new-tile" onClick={onNewProject}><span className="project-new-icon"><Plus size={20} /></span><strong>{ui.newProject}</strong><span>{ui.blankCanvas}</span></button></div></section></main>;
 }
 
 function AuthLoadingScreen() {
@@ -701,7 +702,7 @@ function AuthLoadingScreen() {
 
 function LoginRequiredScreen({ language, onLanguageChange, onLogin }: { language: Language; onLanguageChange: (language: Language) => void; onLogin: () => void }) {
   const ui = uiCopy[language];
-  return <main className="auth-gate"><div className="auth-language"><LanguageSelect value={language} onChange={onLanguageChange} /></div><div className="auth-gate-card"><a className="auth-back-link" href="/"><ArrowLeft size={14} /> {ui.backToSite}</a><div className="modal-brand"><div className="brand-mark"><span>S</span><span>F</span></div><span>siteforge<span>.</span></span></div><span className="eyebrow">{ui.membersOnly}</span><h1>{ui.buildA}<br /><em>{ui.buildB}</em></h1><p>{ui.loginDescription}</p><div className="security-list"><span><ShieldCheck size={15} /> {language === "pt" ? "Login oficial Manus OAuth" : language === "es" ? "Inicio oficial Manus OAuth" : "Official Manus OAuth login"}</span><span><CloudIcon /> {language === "pt" ? "Edições sincronizadas na nuvem" : language === "es" ? "Ediciones sincronizadas en la nube" : "Edits synced to the cloud"}</span><span><KeyRound size={15} /> {language === "pt" ? "Seu workspace protegido" : language === "es" ? "Tu espacio protegido" : "Your workspace is protected"}</span></div><button className="login-button" onClick={onLogin}><LogIn size={15} /> {ui.continueManus} <ArrowRight size={15} /></button><p className="legal-copy">{language === "pt" ? "O editor só fica disponível depois da confirmação da sua sessão." : language === "es" ? "El editor estará disponible después de confirmar tu sesión." : "The editor becomes available after your session is confirmed."}</p></div></main>;
+  return <main className="auth-gate"><div className="auth-language"><LanguageSelect value={language} onChange={onLanguageChange} /></div><div className="auth-gate-card"><a className="auth-back-link" href={url("/")}><ArrowLeft size={14} /> {ui.backToSite}</a><div className="modal-brand"><div className="brand-mark"><span>S</span><span>F</span></div><span>siteforge<span>.</span></span></div><span className="eyebrow">{ui.membersOnly}</span><h1>{ui.buildA}<br /><em>{ui.buildB}</em></h1><p>{ui.loginDescription}</p><div className="security-list"><span><ShieldCheck size={15} /> {language === "pt" ? "Login oficial Manus OAuth" : language === "es" ? "Inicio oficial Manus OAuth" : "Official Manus OAuth login"}</span><span><CloudIcon /> {language === "pt" ? "Edições sincronizadas na nuvem" : language === "es" ? "Ediciones sincronizadas en la nube" : "Edits synced to the cloud"}</span><span><KeyRound size={15} /> {language === "pt" ? "Seu workspace protegido" : language === "es" ? "Tu espacio protegido" : "Your workspace is protected"}</span></div><button className="login-button" onClick={onLogin}><LogIn size={15} /> {ui.continueManus} <ArrowRight size={15} /></button><p className="legal-copy">{language === "pt" ? "O editor só fica disponível depois da confirmação da sua sessão." : language === "es" ? "El editor estará disponible después de confirmar tu sesión." : "The editor becomes available after your session is confirmed."}</p></div></main>;
 }
 function AuthModal({ user, onClose, onLogin, onLogout }: { user: AuthUser | null; onClose: () => void; onLogin: () => void; onLogout: () => void }) {
   return <div className="modal-backdrop" onMouseDown={onClose}><section className="modal-card auth-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X size={15} /></button><div className="modal-brand"><div className="brand-mark"><span>S</span><span>F</span></div><span>siteforge<span>.</span></span></div>{user ? <><span className="eyebrow">Account</span><h2 className="modal-title">Good to see you, {user.name || "creator"}.</h2><p className="modal-copy">Sua conta está conectada e seu projeto pode sincronizar com o cloud.</p><div className="account-card"><div className="account-avatar">{(user.name || user.email).slice(0, 2).toUpperCase()}</div><div><strong>{user.name || "Manus member"}</strong><span>{user.email || "Conta Manus"}</span></div></div><div className="modal-actions"><button className="modal-secondary danger" onClick={onLogout}><LogOut size={14} /> Sair</button></div></> : <><span className="eyebrow">Secure access</span><h2 className="modal-title">Your canvas,<br /><em>everywhere.</em></h2><p className="modal-copy">Entre com sua conta Manus para sincronizar projetos e publicar experiências.</p><div className="security-list"><span><ShieldCheck size={15} /> OAuth Manus seguro</span><span><CloudIcon /> Seus drafts sincronizados no cloud</span><span><KeyRound size={15} /> Workspace protegido</span></div><button className="login-button" onClick={onLogin}><LogIn size={15} /> Continue with Manus <ArrowRight size={15} /></button><p className="legal-copy">Ao continuar, você será redirecionado para o provedor Manus.</p></>}</section></div>;
