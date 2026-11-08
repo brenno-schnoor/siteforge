@@ -19,7 +19,7 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps:deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
@@ -36,6 +36,11 @@ jobs:
 
       - name: Compilar o projeto (Build)
         run: npm run build
+        env:
+          GITHUB_PAGES: "true"
+
+      - name: Copiar index.html para 404.html (rotas do SPA)
+        run: cp dist/index.html dist/404.html
 
       - name: Configurar Pages
         uses: actions/configure-pages@v4
