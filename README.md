@@ -98,6 +98,7 @@ src/
   vite-env.d.ts    Tipos das variáveis de ambiente
 desktop/
   main.js          Aplicativo Electron: janela, servidor local, menu e verificador de atualizações
+  README.md        Como rodar, gerar e publicar os instaladores
   preload.js       Ponte segura entre o editor e o aplicativo
   package.json     Configuração do electron-builder (Windows, macOS e Linux)
   README.md        Como rodar e gerar os instaladores
@@ -116,8 +117,12 @@ assets/
   pages_imgs/                      Capturas das páginas (root, work, about, integrations)
 .github/workflows/
   deploy.yml         Build e publicação no GitHub Pages
-  desktop-build.yml  Instaladores do aplicativo (manual ou tag desktop-v*)
+  desktop-build.yml  Instaladores do aplicativo; ao criar a tag desktop-v* publica na release
 ```
+
+## Baixar o aplicativo desktop
+
+Os instaladores não ficam no repositório (são arquivos grandes). Eles são publicados nas **Releases** do GitHub, com as tags `desktop-v*`. Para publicar uma nova versão, crie a tag `desktop-vX.Y.Z` no `main`: o workflow *Build desktop app* gera Windows, macOS e Linux e anexa tudo na release.
 
 ## Como contribuir com uma nova versão
 
