@@ -17,15 +17,51 @@
   "build": {
     "appId": "dev.siteforge.desktop",
     "productName": "SiteForge",
-    "directories": { "output": "release" },
-    "files": ["main.js", "preload.js", "package.json"],
-    "extraResources": [{ "from": "../dist", "to": "web" }],
-    "fileAssociations": [
-      { "ext": "psf", "name": "SiteForge Project", "role": "Editor" }
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
     ],
-    "win": { "target": ["nsis", "portable"] },
-    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.developer-tools" },
-    "linux": { "target": ["AppImage", "deb"], "category": "Graphics" },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
-  }
+    "extraResources": [
+      {
+        "from": "../dist",
+        "to": "web"
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": "psf",
+        "name": "SiteForge Project",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Graphics"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "homepage": "https://brenno-schnoor.github.io/siteforge/"
 }
