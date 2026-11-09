@@ -16,20 +16,56 @@ O foco atual está em:
 - edição visual de páginas, camadas, tipografia, cores e composição;
 - cenas 3D interativas com Three.js e resposta ao ponteiro;
 - preview desktop, tablet e mobile;
-- persistência de projetos por usuário;
+- persistência de projetos por usuário no Supabase;
 - login com Google para proteger o workspace;
-- gerenciamento de servidores MCP dentro do editor;
 - interface pública em português, inglês e espanhol;
 - tema claro e escuro.
+
+## Versão atual: v0.0.2
+
+**Editor**
+- Camadas por página, arrastar, redimensionar, desfazer/refazer e atalhos de teclado
+- Alinhamento estilo Canva, guias e encaixe, com edição de texto direta no canvas
+- Páginas, links entre páginas e upload de imagens
+- Transformações, animação ao mover o mouse e ao rolar a página
+- Templates: Landing, Portfólio, Produto, Restaurante e Loja
+- Busca rápida (⌘K) e nome do projeto editável
+- Limite de 1 projeto por conta, para não sobrecarregar o banco de dados
+
+**Elementos**
+- Texto, botão, imagem, contêiner e objetos 3D (6 formas)
+- Vídeo (YouTube ou Vimeo), mapa, forma, texto rolante
+- Redes sociais com logos e links
+- Formulário de contato com campos configuráveis e envio para endereço https
+- Anúncio AdSense (ID do editor e do bloco)
+
+**Idiomas**
+- Seletor de idioma (menu ou botões) no site
+- Tradução automática dos textos, com opção "Não traduzir" por elemento
+- Idioma original configurável
+
+**SEO**
+- Título, descrição e palavras-chave por página, com prévia de busca
+
+**Publicação**
+- Publicar gera um `.zip` com o site completo em HTML, CSS e JavaScript, incluindo `sitemap.xml`, `robots.txt` e `seo.json`
+
+**Layout e tema**
+- Tema claro em tom branco amarelado (o site criado não muda com o tema)
+- Layout responsivo para celular, tablet e notebook (ainda em ajuste fino)
+
+**Conhecido nesta versão**
+- A interface em telas pequenas ainda precisa de ajustes finos
+- A tradução automática usa um serviço gratuito com limite diário
+- O formulário só envia para um endereço https configurado
 
 ## Stack
 
 - React + TypeScript + Vite
 - Three.js
-- Express 5
-- MySQL via `mysql2` quando `DATABASE_URL` está disponível
-- Google OAuth e JWT para sessão
-- Lucide React para ícones
+- Supabase (autenticação com Google e tabela `projects` com RLS)
+- GitHub Pages para publicação do próprio editor
+- Express 5 (servidor de desenvolvimento e rotas de apoio)
 
 ## Execução local
 
@@ -45,7 +81,7 @@ npm run build
 npm run preview
 ```
 
-Variáveis usadas pelo login com Google e pela persistência podem ser configuradas no ambiente de execução. Não inclua segredos no repositório.
+Para o login e a persistência, configure no ambiente de build as variáveis `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (ou use os valores padrão do projeto). Consulte `supabase/schema.sql` para criar a tabela `projects` com as regras de acesso por usuário. Não inclua segredos no repositório.
 
 ## Estrutura principal
 
@@ -56,11 +92,18 @@ src/
   main.tsx         Roteamento por pathname
   styles.css       Sistema visual e responsividade
 server/
-  index.mjs        Runtime Express, Google OAuth e API de projetos
-  db.mjs           Schema e persistência de usuários/projetos
-public/
-  manus-routes.json Manifesto de rotas do Preview
+  index.mjs        Runtime Express de apoio ao desenvolvimento
+  db.mjs           Schema auxiliar (não usado pelo site publicado)
+supabase/
+  schema.sql       Tabela `projects` e regras de acesso (RLS)
 ```
+
+## Como contribuir com uma nova versão
+
+1. Crie uma branch a partir de `main`.
+2. Faça as alterações e abra um Pull Request.
+3. Depois do merge, o GitHub Pages publica automaticamente.
+4. Crie uma tag e uma release no GitHub (por exemplo, `v0.0.3`), descrevendo as mudanças.
 
 ## Vídeo de anúncio
 
