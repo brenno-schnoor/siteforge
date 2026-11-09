@@ -1,0 +1,31 @@
+{
+  "name": "siteforge-desktop",
+  "version": "0.0.2",
+  "description": "SiteForge para Windows, macOS e Linux",
+  "author": "SiteForge",
+  "main": "main.js",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "dev.siteforge.desktop",
+    "productName": "SiteForge",
+    "directories": { "output": "release" },
+    "files": ["main.js", "preload.js", "package.json"],
+    "extraResources": [{ "from": "../dist", "to": "web" }],
+    "fileAssociations": [
+      { "ext": "psf", "name": "SiteForge Project", "role": "Editor" }
+    ],
+    "win": { "target": ["nsis", "portable"] },
+    "mac": { "target": ["dmg", "zip"], "category": "public.app-category.developer-tools" },
+    "linux": { "target": ["AppImage", "deb"], "category": "Graphics" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true }
+  }
+}

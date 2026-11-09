@@ -1,0 +1,41 @@
+name: Build desktop app
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependências do editor
+        run: npm ci
+
+      - name: Gerar o editor web
+        run: npm run build
+
+      - name: Instalar dependências do aplicativo
+        working-directory: desktop
+        run: npm install
+
+      - name: Gerar instaladores
+        working-directory: desktop
+        run: npm run dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: siteforge-desktop-${{ matrix.os }}
+          path: desktop/release/*
