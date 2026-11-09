@@ -2,7 +2,10 @@
   "name": "siteforge-desktop",
   "version": "0.0.2",
   "description": "SiteForge para Windows, macOS e Linux",
-  "author": "SiteForge",
+  "author": {
+    "name": "SiteForge",
+    "email": "brenno-schnoor@users.noreply.github.com"
+  },
   "main": "main.js",
   "license": "UNLICENSED",
   "private": true,
