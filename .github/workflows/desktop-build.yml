@@ -59,8 +59,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="$GITHUB_REF_NAME"
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/* --clobber
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* -R "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" dist/* --title "SiteForge ${TAG#desktop-}" --generate-notes
+            gh release create "$TAG" dist/* -R "$GITHUB_REPOSITORY" --title "SiteForge ${TAG#desktop-}" --generate-notes
           fi
