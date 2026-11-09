@@ -87,15 +87,24 @@ Para o login e a persistência, configure no ambiente de build as variáveis `VI
 
 ```text
 src/
-  App.tsx          Editor protegido, projetos, autenticação e MCP
+  App.tsx          Editor protegido: páginas, camadas, elementos, SEO, idiomas e publicação
   PublicSite.tsx   Site público e páginas institucionais
+  NotFound.tsx     Página 404
   main.tsx         Roteamento por pathname
+  paths.ts         Caminhos com o prefixo do GitHub Pages
+  supabase.ts      Login com Google, sessão e salvamento de projetos
   styles.css       Sistema visual e responsividade
+  vite-env.d.ts    Tipos das variáveis de ambiente
 server/
-  index.mjs        Runtime Express de apoio ao desenvolvimento
+  index.mjs        Servidor Express de apoio ao desenvolvimento
   db.mjs           Schema auxiliar (não usado pelo site publicado)
 supabase/
   schema.sql       Tabela `projects` e regras de acesso (RLS)
+public/
+  favicon.svg      Ícone do site
+  manus-routes.json Manifesto de rotas do Preview
+.github/workflows/
+  deploy.yml       Build e publicação no GitHub Pages
 ```
 
 ## Como contribuir com uma nova versão
