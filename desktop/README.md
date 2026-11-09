@@ -18,6 +18,16 @@ npm install
 npm start
 ```
 
+## Baixar instaladores prontos
+
+Veja a aba **Releases** do repositório (tags `desktop-v*`). Não há binários dentro desta pasta.
+
+## Publicar uma nova versão
+
+1. Atualize `"version"` em `desktop/package.json`.
+2. Crie a tag `desktop-vX.Y.Z` no `main` (por exemplo, pela tela de Releases do GitHub).
+3. O workflow *Build desktop app* compila os três sistemas e publica na release.
+
 ## Gerar instaladores
 
 ```bash
