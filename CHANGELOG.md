@@ -2,28 +2,25 @@
 
 Todas as mudanças notáveis do SiteForge estão documentadas aqui.
 
-## Desktop v0.0.2
+## v0.0.2
 
-Primeiro aplicativo para Windows, macOS e Linux.
-
-- Editor em janela própria, com servidor local (rotas do editor funcionam offline)
+**Aplicativo desktop (Windows, macOS e Linux)**
+- Editor em janela própria, com servidor local (o editor abre sem internet)
+- Projetos locais sem limite; nuvem disponível com login Google quando houver internet
 - Arquivos de projeto **SiteForge Project (.psf)**, associados ao aplicativo
-- Projetos locais sem limite; nuvem continua disponível com login Google (quando houver internet)
 - Menu *Ajuda → Verificar atualizações*
 - Versões: instalador e portátil no Windows; `.dmg` e `.zip` no macOS; `.AppImage` e `.deb` no Linux
-
-## v0.0.2
 
 **Editor**
 - Camadas por página, arrastar, redimensionar, desfazer/refazer e atalhos de teclado
 - Alinhamento estilo Canva, guias e encaixe, com edição de texto no canvas
 - Páginas, links entre páginas e upload de imagens
-- Transformações e animações ao mover o mouse e ao rolar a página
+- Animações ao mover o mouse e ao rolar a página
 - Templates: Landing, Portfólio, Produto, Restaurante e Loja
 - Busca rápida (⌘K) e nome do projeto editável
 - Cor de destaque do editor e do site
-- Salvar e abrir projetos em arquivo `.psf`
-- Limite de 1 projeto por conta na nuvem, para não sobrecarregar o banco de dados
+- Salvar e abrir projetos em `.psf`
+- Limite de 1 projeto na nuvem, para não sobrecarregar o banco de dados
 
 **Elementos**
 - Texto, botão, imagem, contêiner e objetos 3D (6 formas)
@@ -49,7 +46,7 @@ Primeiro aplicativo para Windows, macOS e Linux.
 **Layout, tema e acessibilidade**
 - Tema claro em tom branco amarelado (o site criado não muda com o tema)
 - Layout responsivo para celular, tablet e notebook (ajuste fino em andamento)
-- Avisos de texto alternativo e de envio de formulário; aviso de projeto grande
+- Avisos de texto alternativo, de envio de formulário e de projeto grande
 - Favicon e ícone da marca em `assets/`
 
 **Correções**
@@ -63,9 +60,3 @@ Primeiro aplicativo para Windows, macOS e Linux.
 - Interface em telas pequenas ainda precisa de ajustes finos
 - Tradução automática usa serviço gratuito com limite diário
 - Formulário só envia para endereço https configurado
-
-## v0.0.1
-
-- Primeira versão do editor, publicada no GitHub Pages
-- Login com Google e salvamento de projetos no Supabase
-- Página 404 e publicação inicial
