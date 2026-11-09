@@ -608,3 +608,22 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .inspector { grid-column: 2; grid-row: 3; position: relative; }
   .bottom-dock { left: 62px; right: 12px; }
 }
+
+/* Layout responsivo final: larguras dos painéis em variáveis, para a barra inferior acompanhar o editor */
+.app-shell { --rail-w: 53px; --sidebar-w: 230px; --inspector-w: 278px; }
+.workspace { grid-template-columns: var(--rail-w) var(--sidebar-w) minmax(0, 1fr) var(--inspector-w); }
+.bottom-dock { left: calc(var(--rail-w) + var(--sidebar-w) + 14px); right: calc(var(--inspector-w) + 14px); }
+@media (max-width: 1280px) {
+  .app-shell { --rail-w: 48px; --sidebar-w: 190px; --inspector-w: 230px; }
+}
+@media (max-width: 1024px) {
+  .app-shell { --sidebar-w: 0px; --inspector-w: 0px; }
+  .workspace { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+  .bottom-dock { left: calc(var(--rail-w) + 12px); right: 12px; }
+}
+@media (max-width: 860px) {
+  .app-shell { --rail-w: 0px; --sidebar-w: 0px; --inspector-w: 0px; }
+  .workspace { grid-template-columns: 1fr; }
+  .bottom-dock { left: 10px; right: 10px; bottom: 10px; }
+  .inspector { min-height: 0; }
+}
