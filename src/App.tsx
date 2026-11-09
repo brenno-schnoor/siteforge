@@ -66,7 +66,7 @@ import { appPath, url } from "./paths";
 import { beginGoogleLogin, getCurrentUser, loadCloudProject, saveCloudProject, signOutCloud } from "./supabase";
 
 type Device = "desktop" | "tablet" | "mobile";
-type InspectorTab = "design" | "animate";
+type InspectorTab = "design" | "animate" | "seo";
 type LayerKind = "scene" | "text" | "button" | "image" | "group" | "language" | "video" | "map" | "shape" | "marquee" | "social" | "form";
 type Shape3D = "orb" | "cube" | "torus" | "pyramid" | "knot" | "cylinder";
 const shapeOptions: Record<Shape3D, string> = { orb: "Esfera", cube: "Cubo", torus: "Anel", pyramid: "Pirâmide", knot: "Nó", cylinder: "Cilindro" };
@@ -190,6 +190,9 @@ type Page = {
   path: string;
   accent: string;
   kind: "home" | "work" | "about";
+  seoTitle?: string;
+  seoDescription?: string;
+  seoKeywords?: string;
 };
 
 // Posição e tamanho em porcentagem da área do canvas (0 a 100), para funcionar em qualquer zoom e dispositivo.
@@ -584,6 +587,15 @@ function App() {
   const siteLanguageLayer = layers.find((layer) => layer.kind === "language");
   const sourceLang = siteLanguageLayer?.sourceLanguage ?? "pt";
   const autoRequested = useRef(new Set<string>());
+
+  // SEO da página: título e descrição aparecem na aba e nos metadados da pré-visualização.
+  useEffect(() => {
+    if (!preview || !activePage) return;
+    document.title = activePage.seoTitle || activePage.name;
+    let meta = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!meta) { meta = document.createElement("meta"); meta.name = "description"; document.head.appendChild(meta); }
+    meta.content = activePage.seoDescription ?? "";
+  }, [preview, activePage?.id, activePage?.name, activePage?.seoTitle, activePage?.seoDescription]);
   const [autoTranslated, setAutoTranslated] = useState<Record<string, string>>({});
   const baseTextOf = (layer: Layer) => layer.kind === "button"
     ? (layer.text ?? "Explore the system")
@@ -1197,7 +1209,7 @@ function App() {
 
         <aside className="sidebar right-sidebar">
           <div className="inspector-heading"><div><span className="eyebrow">Inspector</span><h2>{selectedLayer?.name ?? "Layer"}</h2></div><button className="icon-button"><MoreDots /></button></div>
-          <div className="inspector-tabs"><button className={activeInspector === "design" ? "active" : ""} onClick={() => setActiveInspector("design")}><Palette size={14} /> Design</button><button className={activeInspector === "animate" ? "active" : ""} onClick={() => setActiveInspector("animate")}><WandSparkles size={14} /> Animate <span className="new-badge">NEW</span></button></div>
+          <div className="inspector-tabs"><button className={activeInspector === "design" ? "active" : ""} onClick={() => setActiveInspector("design")}><Palette size={14} /> Design</button><button className={activeInspector === "animate" ? "active" : ""} onClick={() => setActiveInspector("animate")}><WandSparkles size={14} /> Animate <span className="new-badge">NEW</span></button><button className={activeInspector === "seo" ? "active" : ""} onClick={() => setActiveInspector("seo")}><Search size={14} /> SEO</button></div>
           {activeInspector === "design" ? <div className="inspector-scroll">
             <div className="inspector-section"><div className="inspector-section-title">Layout <ChevronDown size={14} /></div><div className="property-grid">{(["x", "y", "w", "h"] as const).map((key) => (
                 <label key={key} className="property-field"><span>{key.toUpperCase()} %</span><input type="number" min={0} max={100} disabled={!chosenLayer || chosenLayer.locked} value={chosenLayer ? Math.round(boxOf(chosenLayer, layers.indexOf(chosenLayer))[key] * 10) / 10 : 0} onChange={(event) => { if (!chosenLayer) return; const box = boxOf(chosenLayer, layers.indexOf(chosenLayer)); updateLayer(chosenLayer.id, { box: { ...box, [key]: Number(event.target.value) } }); }} /></label>
@@ -1219,6 +1231,14 @@ function App() {
             {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && <div className="inspector-section"><div className="inspector-section-title">Tradução <ChevronDown size={14} /></div><div className="effect-row"><div><strong>Não traduzir</strong><span>Mantém este elemento no idioma original</span></div><button className={`toggle ${chosenLayer.noTranslate ? "active" : ""}`} onClick={() => updateLayer(chosenLayer.id, { noTranslate: !chosenLayer.noTranslate })}><span /></button></div></div>}
             {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && siteLanguageCodes.length > 0 && !chosenLayer.noTranslate && <div className="inspector-section"><div className="inspector-section-title">Traduções <ChevronDown size={14} /></div><p className="translation-hint">Os textos são traduzidos automaticamente ao escolher um idioma no site. Escreva abaixo se quiser substituir a tradução automática.</p>{siteLanguageCodes.map((code) => <label key={code} className="property-field translation-field"><span>{siteLanguages[code]}</span><input value={chosenLayer.translations?.[code] ?? ""} placeholder={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { translations: { ...(chosenLayer.translations ?? {}), [code]: event.target.value } })} /></label>)}</div>}
             <div className="inspector-section"><div className="inspector-section-title">Effects <ChevronDown size={14} /></div><div className="effect-row"><div className="effect-icon"><Sparkles size={14} /></div><div><strong>Soft glow</strong><span>Screen · 22%</span></div><button className={`toggle ${chosenLayer?.glow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { glow: !chosenLayer.glow }); }}><span /></button></div><div className="effect-row"><div className="effect-icon dark"><Box size={14} /></div><div><strong>Noise texture</strong><span>Overlay · 12%</span></div><button className={`toggle ${layers.find((item) => item.id === "noise")?.visible !== false ? "active" : ""}`} onClick={() => { const noise = layers.find((item) => item.id === "noise"); if (noise) updateLayer(noise.id, { visible: !noise.visible }); }}><span /></button></div></div>
+          </div> : activeInspector === "seo" && activePage ? <div className="inspector-scroll">
+            <div className="inspector-section"><div className="inspector-section-title">SEO da página <ChevronDown size={14} /></div>
+              <label className="property-field"><span>Título ({(activePage.seoTitle ?? "").length}/60)</span><input value={activePage.seoTitle ?? ""} maxLength={60} placeholder={activePage.name} onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoTitle: event.target.value } : item))} onBlur={() => { void saveProject(); }} /></label>
+              <label className="property-field"><span>Descrição ({(activePage.seoDescription ?? "").length}/160)</span><textarea className="seo-textarea" value={activePage.seoDescription ?? ""} maxLength={160} placeholder="Resuma o conteúdo desta página em até 160 caracteres." onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoDescription: event.target.value } : item))} onBlur={() => { void saveProject(); }} /></label>
+              <label className="property-field"><span>Palavras-chave</span><input value={activePage.seoKeywords ?? ""} placeholder="design, portfólio, estúdio" onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoKeywords: event.target.value } : item))} onBlur={() => { void saveProject(); }} /></label>
+              <div className="seo-preview"><span className="seo-url">{activePage.path}</span><strong>{activePage.seoTitle || activePage.name}</strong><p>{activePage.seoDescription || "Sem descrição. Buscadores vão mostrar um trecho do texto da página."}</p></div>
+              <p className="translation-hint">Esses dados são salvos no projeto e aplicados na pré-visualização (título da aba e descrição).</p>
+            </div>
           </div> : <div className="inspector-scroll"><div className="animation-card"><div className="animation-icon"><MousePointer2 size={16} /></div><div><span className="eyebrow">Pointer interaction</span><h3>Follow cursor</h3><p>Object subtly leans toward the pointer position.</p></div><button className={`toggle ${chosenLayer?.follow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { follow: !chosenLayer.follow }); }}><span /></button></div><div className="inspector-section"><div className="inspector-section-title">Trigger <ChevronDown size={14} /></div><div className="select-field"><MousePointer2 size={13} /><select value="move" onChange={() => undefined}><option value="move">On mouse move</option></select><ChevronDown size={13} /></div></div><div className="inspector-section"><div className="inspector-section-title">Motion curve <ChevronDown size={14} /></div><div className="curve-preview"><span /><span /><span /><span /><span /></div><div className="curve-labels"><span>Gentle</span><span>Spring</span></div></div><div className="inspector-section"><div className="inspector-section-title">Response <ChevronDown size={14} /></div><label className="property-field"><span>Intensity %</span><input type="number" min={0} max={100} disabled={!chosenLayer} value={chosenLayer?.intensity ?? 12} onChange={(event) => { if (chosenLayer) updateLayer(chosenLayer.id, { intensity: Number(event.target.value) }); }} /></label><Property label="Duration" value="800 ms" /><Property label="Delay" value="0 ms" /></div></div>}
           <div className="inspector-footer"><button className="delete-button" onClick={deleteSelectedLayer}><Trash2 size={14} /> Delete layer</button><span className="muted">{selectedLayer?.locked ? "Locked" : "Editable"}</span></div>
         </aside>

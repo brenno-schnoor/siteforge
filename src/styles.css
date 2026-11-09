@@ -553,3 +553,14 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .edit-form input, .edit-form textarea { background: #0e0f13; border: 1px solid rgba(255,255,255,.15); border-radius: 5px; color: #eef1eb; padding: 7px; font: 12px 'DM Sans'; min-width: 0; }
 .edit-form textarea { flex: 1; resize: none; }
 .edit-form button { background: var(--lime); color: #11150e; border: 0; border-radius: 5px; padding: 7px; font-weight: 600; cursor: pointer; }
+
+/* SEO da página */
+.seo-textarea { min-height: 70px; resize: vertical; background: #15171d; color: #eff2ec; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; padding: 6px; font: 11px 'DM Sans'; width: 100%; }
+.seo-preview { margin-top: 6px; padding: 12px; border-radius: 8px; border: 1px solid var(--line); background: #13151c; display: flex; flex-direction: column; gap: 4px; }
+.seo-url { font-size: 10px; color: #7f8d74; }
+.seo-preview strong { font-size: 14px; color: #8ab4ff; font-weight: 500; }
+.seo-preview p { margin: 0; font-size: 11px; line-height: 1.5; color: #9da4a6; }
+[data-theme="light"] .seo-textarea { background: #fffdf3; color: #241f0c; border-color: rgba(90,70,20,.18); }
+[data-theme="light"] .seo-preview { background: #fffdf3; border-color: rgba(90,70,20,.14); }
+[data-theme="light"] .seo-preview strong { color: #1a4fb8; }
+[data-theme="light"] .seo-preview p, [data-theme="light"] .seo-url { color: #6f7a66; }
