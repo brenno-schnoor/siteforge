@@ -571,3 +571,22 @@ html, body { max-width: 100%; overflow-x: hidden; }
 /* Acessibilidade */
 .a11y-warning { margin: 6px 0 0; font-size: 10px; line-height: 1.5; color: #f0b44c; }
 [data-theme="light"] .a11y-warning { color: #9a5b00; }
+
+/* Campos empilhados (rótulo acima do campo) */
+.property-field.stacked { height: auto; gap: 5px; }
+.property-field.stacked input, .property-field.stacked textarea, .property-field.stacked select { height: 30px; }
+.property-field.stacked textarea { height: auto; min-height: 70px; }
+.property-field.stacked select { width: 100%; background: #15171d; color: #eff2ec; border: 1px solid rgba(255,255,255,.12); border-radius: 5px; font-size: 11px; }
+[data-theme="light"] .property-field.stacked select { background: #fffdf3; color: #241f0c; border-color: rgba(90,70,20,.18); }
+
+/* Seletor de redes e campos */
+.social-picker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.social-picker button { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line); background: #171a22; color: #a5abb1; font-size: 10px; cursor: pointer; }
+.social-picker button img { width: 13px; height: 13px; filter: invert(1); opacity: .75; }
+.social-picker button.active { border-color: rgba(184,255,61,.5); color: var(--lime); background: rgba(184,255,61,.08); }
+[data-theme="light"] .social-picker button { background: #fffdf3; color: #4f4829; border-color: rgba(90,70,20,.16); }
+[data-theme="light"] .social-picker button img { filter: none; opacity: .8; }
+[data-theme="light"] .social-picker button.active { color: #2d4a1c; background: #e6f0d8; border-color: rgba(90,140,30,.45); }
+.social-chip { width: 32px; height: 32px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.06); }
+.social-chip img { width: 16px; height: 16px; filter: invert(1); }
+.edit-social { flex-wrap: wrap; }
