@@ -123,13 +123,103 @@ function PublicHeader({ page, theme, setTheme, language, setLanguage }: { page: 
   return <header className="public-header"><a className="public-brand" href={url("/")}><span className="brand-mark"><span>S</span><span>F</span></span><span>siteforge<span>.</span></span></a><nav className={menuOpen ? "open" : ""}>{nav.map(([id, label]) => <a key={id} className={page === id ? "active" : ""} href={url(`/${id}`)}>{label}</a>)}</nav><div className="public-actions"><PublicLanguageSelect value={language} onChange={setLanguage} /><button className="public-theme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} aria-label="Alternar tema">{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button><a className="public-login" href={url("/editor")}>{copy.signIn}</a><a className="public-cta small" href={url("/editor")}>{copy.editor} <ArrowRight size={14} /></a><button className="public-menu" onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? <X size={18} /> : <Menu size={18} />}</button></div></header>;
 }
 
+// Animações do site público: rastro do mouse, revelação ao rolar, parallax no topo e barra de progresso.
+function PublicMotion() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const fine = window.matchMedia("(pointer: fine)").matches;
+
+    // Revelação ao rolar
+    const revealTargets = Array.from(document.querySelectorAll<HTMLElement>(".feature-card, .inner-hero, .about-split > *"));
+    revealTargets.forEach((el) => el.classList.add("reveal"));
+    let observer: IntersectionObserver | null = null;
+    if (reduce || !("IntersectionObserver" in window)) {
+      revealTargets.forEach((el) => el.classList.add("is-visible"));
+    } else {
+      observer = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) { entry.target.classList.add("is-visible"); observer?.unobserve(entry.target); }
+        });
+      }, { threshold: 0.15 });
+      revealTargets.forEach((el) => observer?.observe(el));
+    }
+
+    // Parallax suave no topo e barra de progresso
+    const parallax = Array.from(document.querySelectorAll<HTMLElement>(".home-hero .hero-copy"));
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const y = window.scrollY;
+        parallax.forEach((el) => { el.style.transform = reduce ? "" : `translateY(${Math.min(y, 800) * 0.12}px)`; });
+        const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+        if (barRef.current) barRef.current.style.transform = `scaleX(${Math.min(1, y / max)})`;
+      });
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    // Rastro do mouse (somente com mouse e sem "reduzir movimento")
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext("2d") ?? null;
+    let trail: { x: number; y: number; life: number }[] = [];
+    let raf = 0;
+    const resize = () => {
+      if (!canvas || !ctx) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    resize();
+    const onMove = (event: PointerEvent) => {
+      trail.push({ x: event.clientX, y: event.clientY, life: 1 });
+      if (trail.length > 40) trail.shift();
+    };
+    const draw = () => {
+      if (ctx && canvas) {
+        const color = getComputedStyle(document.documentElement).getPropertyValue("--lime").trim() || "#b8ff3d";
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+        trail = trail.filter((point) => (point.life -= 0.03) > 0);
+        trail.forEach((point) => {
+          ctx.globalAlpha = point.life * 0.5;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 2 + 8 * point.life, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    if (!reduce && fine && ctx) {
+      window.addEventListener("pointermove", onMove);
+      raf = requestAnimationFrame(draw);
+    }
+    window.addEventListener("resize", resize);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("resize", resize);
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(frame);
+      parallax.forEach((el) => { el.style.transform = ""; });
+    };
+  }, []);
+  return <><canvas ref={canvasRef} className="cursor-trail" aria-hidden="true" /><div className="scroll-progress" ref={barRef} aria-hidden="true" /></>;
+}
+
 function PublicShell({ page, children }: { page: PublicPage; children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(() => localStorage.getItem("siteforge-theme") === "light" ? "light" : "dark");
   const [language, setLanguage] = useState<PublicLanguage>(() => (localStorage.getItem("siteforge-language") as PublicLanguage) || "pt");
   const setTheme = (next: Theme) => { setThemeState(next); localStorage.setItem("siteforge-theme", next); document.documentElement.dataset.theme = next; };
   const setPublicLanguage = (next: PublicLanguage) => { setLanguage(next); localStorage.setItem("siteforge-language", next); };
   useEffect(() => { document.body.classList.add("public-body"); document.documentElement.dataset.theme = theme; document.title = `SiteForge — ${page[0].toUpperCase()}${page.slice(1)}`; return () => document.body.classList.remove("public-body"); }, [page, theme]);
-  return <PublicLanguageContext.Provider value={language}><PublicLocaleContext.Provider value={publicLocale[language]}><div className="public-site"><PublicHeader page={page} theme={theme} setTheme={setTheme} language={language} setLanguage={setPublicLanguage} />{children}<footer className="public-footer"><div className="public-brand"><span className="brand-mark"><span>S</span><span>F</span></span><span>siteforge<span>.</span></span></div><span>{publicLocale[language].footer}</span><span>© 2026 SiteForge</span></footer></div></PublicLocaleContext.Provider></PublicLanguageContext.Provider>;
+  return <PublicLanguageContext.Provider value={language}><PublicLocaleContext.Provider value={publicLocale[language]}><div className="public-site"><PublicMotion key={page} /><PublicHeader page={page} theme={theme} setTheme={setTheme} language={language} setLanguage={setPublicLanguage} />{children}<footer className="public-footer"><div className="public-brand"><span className="brand-mark"><span>S</span><span>F</span></span><span>siteforge<span>.</span></span></div><span>{publicLocale[language].footer}</span><span>© 2026 SiteForge</span></footer></div></PublicLocaleContext.Provider></PublicLanguageContext.Provider>;
 }
 
 export default function PublicSite({ page }: PublicSiteProps) {
