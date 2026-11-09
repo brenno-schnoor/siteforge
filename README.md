@@ -101,8 +101,13 @@ server/
 supabase/
   schema.sql       Tabela `projects` e regras de acesso (RLS)
 public/
-  favicon.svg      Ícone do site
+  favicon.svg      Ícone do site (cópia de assets/siteforge_icon.svg)
   manus-routes.json Manifesto de rotas do Preview
+assets/
+  siteforge_icon.svg          Ícone da marca em SVG
+  siteforge_home_ref.png      Referência visual da home
+  siteforge_ad_1024x576_audio.mp4  Vídeo de anúncio
+  pages_imgs/                 Capturas das páginas (root, work, about, integrations)
 .github/workflows/
   deploy.yml       Build e publicação no GitHub Pages
 ```
