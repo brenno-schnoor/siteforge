@@ -25,6 +25,12 @@ import {
   LogOut,
   Image as ImageIcon,
   Languages,
+  Video,
+  MapPin,
+  Circle,
+  Share2,
+  Mail,
+  ArrowRightLeft,
   Layers3,
   Lock,
   Maximize2,
@@ -61,10 +67,33 @@ import { beginGoogleLogin, getCurrentUser, loadCloudProject, saveCloudProject, s
 
 type Device = "desktop" | "tablet" | "mobile";
 type InspectorTab = "design" | "animate";
-type LayerKind = "scene" | "text" | "button" | "image" | "group" | "language";
+type LayerKind = "scene" | "text" | "button" | "image" | "group" | "language" | "video" | "map" | "shape" | "marquee" | "social" | "form";
 type Shape3D = "orb" | "cube" | "torus" | "pyramid" | "knot" | "cylinder";
 const shapeOptions: Record<Shape3D, string> = { orb: "Esfera", cube: "Cubo", torus: "Anel", pyramid: "Pirâmide", knot: "Nó", cylinder: "Cilindro" };
 const siteLanguages: Record<string, string> = { pt: "Português", en: "English", es: "Español", fr: "Français", de: "Deutsch", it: "Italiano", ja: "日本語" };
+
+// Converte um link do YouTube ou Vimeo em endereço de incorporação (somente https).
+function embedUrl(input: string): string {
+  try {
+    const url = new URL(input.trim());
+    if (url.protocol !== "https:") return "";
+    if (url.hostname === "youtu.be") return `https://www.youtube.com/embed/${url.pathname.slice(1)}`;
+    if (url.hostname.endsWith("youtube.com")) return `https://www.youtube.com/embed/${url.searchParams.get("v") ?? url.pathname.split("/").filter(Boolean).pop() ?? ""}`;
+    if (url.hostname.endsWith("vimeo.com")) return `https://player.vimeo.com/video/${url.pathname.split("/").filter(Boolean).pop() ?? ""}`;
+    return "";
+  } catch {
+    return "";
+  }
+}
+
+const elementItems: { kind: LayerKind; name: string; icon: typeof Box; detail: string; extra: Partial<Layer> }[] = [
+  { kind: "video", name: "Vídeo", icon: Video, detail: "Vídeo · YouTube ou Vimeo", extra: { src: "", box: { x: 20, y: 30, w: 60, h: 40 } } },
+  { kind: "map", name: "Mapa", icon: MapPin, detail: "Mapa · endereço", extra: { src: "", box: { x: 20, y: 30, w: 50, h: 40 } } },
+  { kind: "shape", name: "Forma", icon: Circle, detail: "Forma · 2D", extra: { radius: 50, box: { x: 40, y: 40, w: 14, h: 24 } } },
+  { kind: "marquee", name: "Texto rolante", icon: ArrowRightLeft, detail: "Texto · rolagem", extra: { text: "Novidade · Promoção · Novidade", box: { x: 0, y: 88, w: 100, h: 6 } } },
+  { kind: "social", name: "Redes sociais", icon: Share2, detail: "Links · redes", extra: { text: "Instagram, LinkedIn, X", box: { x: 66, y: 88, w: 32, h: 6 } } },
+  { kind: "form", name: "Formulário de contato", icon: Mail, detail: "Formulário · contato", extra: { box: { x: 55, y: 30, w: 36, h: 50 } } },
+];
 
 function shapeGeometry(shape: Shape3D, scale: number) {
   switch (shape) {
@@ -216,6 +245,12 @@ function iconForLayerKind(kind: LayerKind) {
   if (kind === "button") return Square;
   if (kind === "image") return ImageIcon;
   if (kind === "language") return Languages;
+  if (kind === "video") return Video;
+  if (kind === "map") return MapPin;
+  if (kind === "shape") return Circle;
+  if (kind === "marquee") return ArrowRightLeft;
+  if (kind === "social") return Share2;
+  if (kind === "form") return Mail;
   return Box;
 }
 
@@ -499,6 +534,7 @@ function App() {
   const assetInputRef = useRef<HTMLInputElement>(null);
   const [pointer, setPointer] = useState({ x: 50, y: 50 });
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [elementsOpen, setElementsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteQuery, setPaletteQuery] = useState("");
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
@@ -1065,7 +1101,7 @@ function App() {
 
         <section className="editor-stage">
           <div className="stage-toolbar">
-            <div className="toolbar-group"><button className="tool-button active" title="Limpar seleção" onClick={() => { setSelectedLayerId(""); setExtraSelected([]); }}><MousePointer2 size={15} /> {editorCopy[language].select}</button><button className="tool-button" title="Inserir frame" onClick={() => addLayer("group", "Frame", BoxSelect, "Frame · auto")}><BoxSelect size={15} /> {editorCopy[language].frame}</button><button className="tool-button" title="Inserir texto" onClick={() => addLayer("text", "Texto", Type, "Texto · 32 px")}><Type size={15} /> {editorCopy[language].type}</button><button className="tool-button" title="Inserir imagem" onClick={() => assetInputRef.current?.click()}><ImageIcon size={15} /> {editorCopy[language].media}</button><button className="tool-button" title="Inserir objeto 3D" onClick={() => addLayer("scene", "Objeto 3D", Move3d, "Esfera · 3D", { shape: "orb" })}><Move3d size={15} /> {editorCopy[language].threeD}</button><button className="tool-button" title="Inserir seletor de idioma" onClick={() => addLayer("language", "Seletor de idioma", Languages, "Idiomas · 2", { languages: ["pt", "en"], box: { x: 74, y: 4, w: 20, h: 6 } })}><Languages size={15} /> Idioma</button></div>
+            <div className="toolbar-group"><button className="tool-button active" title="Limpar seleção" onClick={() => { setSelectedLayerId(""); setExtraSelected([]); }}><MousePointer2 size={15} /> {editorCopy[language].select}</button><button className="tool-button" title="Inserir frame" onClick={() => addLayer("group", "Frame", BoxSelect, "Frame · auto")}><BoxSelect size={15} /> {editorCopy[language].frame}</button><button className="tool-button" title="Inserir texto" onClick={() => addLayer("text", "Texto", Type, "Texto · 32 px")}><Type size={15} /> {editorCopy[language].type}</button><button className="tool-button" title="Inserir imagem" onClick={() => assetInputRef.current?.click()}><ImageIcon size={15} /> {editorCopy[language].media}</button><button className="tool-button" title="Inserir objeto 3D" onClick={() => addLayer("scene", "Objeto 3D", Move3d, "Esfera · 3D", { shape: "orb" })}><Move3d size={15} /> {editorCopy[language].threeD}</button><button className="tool-button" title="Inserir seletor de idioma" onClick={() => addLayer("language", "Seletor de idioma", Languages, "Idiomas · 2", { languages: ["pt", "en"], box: { x: 74, y: 4, w: 20, h: 6 } })}><Languages size={15} /> Idioma</button><div className="element-menu-wrap"><button className="tool-button" title="Inserir elemento" onClick={() => setElementsOpen((open) => !open)}><Plus size={15} /> Elementos</button>{elementsOpen && <div className="quick-menu element-menu">{elementItems.map((item) => <button key={item.kind} onClick={() => { addLayer(item.kind, item.name, item.icon, item.detail, item.extra); setElementsOpen(false); }}><item.icon size={13} /> {item.name}</button>)}</div>}</div></div>
             <div className="toolbar-center"><button className={`device-button ${device === "desktop" ? "active" : ""}`} onClick={() => setDevice("desktop")}><Maximize2 size={13} /> {editorCopy[language].desktop}</button><button className={`device-button ${device === "tablet" ? "active" : ""}`} onClick={() => setDevice("tablet")}><Square size={12} /> {editorCopy[language].tablet}</button><button className={`device-button ${device === "mobile" ? "active" : ""}`} onClick={() => setDevice("mobile")}><PanelLeft size={12} /> {editorCopy[language].mobile}</button></div>
             <div className="toolbar-group right"><button className="icon-button" aria-label={editorCopy[language].search} title={editorCopy[language].search} onClick={() => setPaletteOpen(true)}><Search size={15} /></button><button className={`icon-button ${showGrid ? "active" : ""}`} aria-label="Mostrar grade" title="Mostrar grade" onClick={() => setShowGrid((value) => !value)}><Grid2X2 size={15} /></button><button className="zoom-button" onClick={() => setZoom((value) => value >= 100 ? 60 : value + 10)}>{zoom}% <ChevronDown size={13} /></button></div>
           </div>
@@ -1129,6 +1165,18 @@ function App() {
                         >{shownText(layer)}</span>
                       ) : layer.kind === "language" ? (
                         <SiteLanguageSwitch codes={layer.languages ?? ["pt", "en"]} value={siteLang} onChange={setSiteLang} style={layer.languageStyle ?? "select"} />
+                      ) : layer.kind === "video" ? (
+                        <div className={`edit-embed${preview ? " is-live" : ""}`}>{embedUrl(layer.src ?? "") ? <iframe src={embedUrl(layer.src ?? "")} title={layer.name} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen /> : <span className="edit-embed-empty"><Video size={16} /> Cole um link do YouTube ou Vimeo</span>}</div>
+                      ) : layer.kind === "map" ? (
+                        <div className={`edit-embed${preview ? " is-live" : ""}`}>{layer.src ? <iframe src={`https://www.google.com/maps?q=${encodeURIComponent(layer.src)}&output=embed`} title={layer.name} loading="lazy" /> : <span className="edit-embed-empty"><MapPin size={16} /> Digite um endereço</span>}</div>
+                      ) : layer.kind === "shape" ? (
+                        <div className="edit-shape" style={{ background: selectedColor, borderRadius: `${layer.radius ?? 0}%`, opacity: layer.opacity ?? 1 }} />
+                      ) : layer.kind === "marquee" ? (
+                        <div className="edit-marquee"><span>{shownText(layer)}</span></div>
+                      ) : layer.kind === "social" ? (
+                        <div className="edit-social">{(layer.text ?? "").split(",").map((name) => name.trim()).filter(Boolean).map((name) => <span key={name}>{name}</span>)}</div>
+                      ) : layer.kind === "form" ? (
+                        <form className={`edit-form${preview ? " is-live" : ""}`} onSubmit={(event) => event.preventDefault()}><input placeholder="Nome" /><input placeholder="E-mail" type="email" /><textarea placeholder="Mensagem" /><button type="button">Enviar</button></form>
                       ) : layer.kind === "image" ? (
                         <div className="edit-image" style={layer.src ? { backgroundImage: `url(${layer.src})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
                       ) : (
@@ -1165,6 +1213,8 @@ function App() {
             <div className="inspector-section"><div className="inspector-section-title">Appearance <ChevronDown size={14} /></div><div className="color-row"><span>Fill</span><button className="color-control" onClick={() => setSelectedColor(selectedColor === "#b8ff3d" ? "#8f9dff" : "#b8ff3d")}><span style={{ background: selectedColor }} />{selectedColor}<ChevronRight size={13} /></button></div><div className="color-row"><span>Gradient</span><button className="gradient-control"><span />linear · 135° <ChevronRight size={13} /></button></div><div className="swatch-row">{colorSwatches.map((color) => <button key={color} className={`swatch ${selectedColor === color ? "active" : ""}`} style={{ background: color }} onClick={() => setSelectedColor(color)} aria-label={`Selecionar cor ${color}`} />)}<button className="swatch-add"><Plus size={13} /></button></div></div>
             <div className="inspector-section"><div className="inspector-section-title">Typography <ChevronDown size={14} /></div><div className="select-field"><Type size={13} /><select value={font} onChange={(event) => setFont(event.target.value)}><option>Space Grotesk</option><option>DM Sans</option><option>Instrument Serif</option></select><ChevronDown size={13} /></div><div className="property-grid"><Property label="Weight" value="Medium" /><Property label="Size" value="64 px" /><Property label="Line" value="0.95" /><Property label="Track" value="-0.03em" /></div></div>
             {chosenLayer?.kind === "scene" && <div className="inspector-section"><div className="inspector-section-title">Forma 3D <ChevronDown size={14} /></div><div className="shape-grid">{(Object.keys(shapeOptions) as Shape3D[]).map((shape) => <button key={shape} className={chosenLayer.shape === shape || (!chosenLayer.shape && shape === "orb") ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { shape })}>{shapeOptions[shape]}</button>)}</div></div>}
+            {chosenLayer && (chosenLayer.kind === "video" || chosenLayer.kind === "map") && <div className="inspector-section"><div className="inspector-section-title">Conteúdo <ChevronDown size={14} /></div><label className="property-field"><span>{chosenLayer.kind === "video" ? "Link do vídeo (YouTube ou Vimeo, https)" : "Endereço no mapa"}</span><input value={chosenLayer.src ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { src: event.target.value })} /></label></div>}
+            {chosenLayer && (chosenLayer.kind === "marquee" || chosenLayer.kind === "social") && <div className="inspector-section"><div className="inspector-section-title">Conteúdo <ChevronDown size={14} /></div><label className="property-field"><span>{chosenLayer.kind === "marquee" ? "Texto que rola" : "Redes (separadas por vírgula)"}</span><input value={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { text: event.target.value })} /></label></div>}
             {chosenLayer?.kind === "language" && <div className="inspector-section"><div className="inspector-section-title">Idiomas do site <ChevronDown size={14} /></div><label className="property-field translation-field"><span>Idioma original dos textos</span><select value={chosenLayer.sourceLanguage ?? "pt"} onChange={(event) => updateLayer(chosenLayer.id, { sourceLanguage: event.target.value })}>{Object.keys(siteLanguages).map((code) => <option key={code} value={code}>{siteLanguages[code]}</option>)}</select></label><div className="shape-grid lang-style-grid"><button className={(chosenLayer.languageStyle ?? "select") === "select" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "select" })}>Menu</button><button className={chosenLayer.languageStyle === "buttons" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "buttons" })}>Botões</button></div><div className="shape-grid">{Object.keys(siteLanguages).map((code) => { const active = (chosenLayer.languages ?? []).includes(code); return <button key={code} className={active ? "active" : ""} onClick={() => { const current = chosenLayer.languages ?? []; updateLayer(chosenLayer.id, { languages: active ? current.filter((item) => item !== code) : [...current, code] }); }}>{siteLanguages[code]}</button>; })}</div></div>}
             {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && <div className="inspector-section"><div className="inspector-section-title">Tradução <ChevronDown size={14} /></div><div className="effect-row"><div><strong>Não traduzir</strong><span>Mantém este elemento no idioma original</span></div><button className={`toggle ${chosenLayer.noTranslate ? "active" : ""}`} onClick={() => updateLayer(chosenLayer.id, { noTranslate: !chosenLayer.noTranslate })}><span /></button></div></div>}
             {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && siteLanguageCodes.length > 0 && !chosenLayer.noTranslate && <div className="inspector-section"><div className="inspector-section-title">Traduções <ChevronDown size={14} /></div><p className="translation-hint">Os textos são traduzidos automaticamente ao escolher um idioma no site. Escreva abaixo se quiser substituir a tradução automática.</p>{siteLanguageCodes.map((code) => <label key={code} className="property-field translation-field"><span>{siteLanguages[code]}</span><input value={chosenLayer.translations?.[code] ?? ""} placeholder={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { translations: { ...(chosenLayer.translations ?? {}), [code]: event.target.value } })} /></label>)}</div>}
