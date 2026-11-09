@@ -627,3 +627,21 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .bottom-dock { left: 10px; right: 10px; bottom: 10px; }
   .inspector { min-height: 0; }
 }
+
+/* Editor em coluna única também em telas de tablet e janelas estreitas */
+@media (max-width: 1024px) {
+  .topbar { height: auto; min-height: 56px; padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .top-actions { flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .project-meta, .topbar .project-name-input { display: none; }
+  .workspace { display: flex; flex-direction: column; height: auto; min-height: 0; }
+  .left-rail { order: 0; flex-direction: row; justify-content: flex-start; gap: 8px; width: 100%; height: auto; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .left-rail .rail-bottom { display: flex; flex-direction: row; gap: 8px; align-items: center; }
+  .rail-line { display: none; }
+  .editor-stage { order: 1; min-height: 72vh; width: 100%; grid-column: auto; grid-row: auto; }
+  .sidebar { order: 2; width: 100%; height: auto; max-height: 52vh; grid-column: auto; grid-row: auto; border-right: 0; border-top: 1px solid var(--line); }
+  .inspector { order: 3; width: 100%; height: auto; min-height: 0; grid-column: auto; grid-row: auto; border-left: 0; border-top: 1px solid var(--line); position: relative; }
+  .inspector-footer { position: static; height: auto; padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+  .stage-toolbar { height: auto; min-height: 52px; flex-wrap: wrap; gap: 8px; padding: 8px 10px; }
+  .toolbar-group, .toolbar-center { overflow-x: auto; max-width: 100%; flex-wrap: nowrap; }
+  .bottom-dock { left: 10px; right: 10px; bottom: 10px; }
+}

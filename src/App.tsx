@@ -1374,7 +1374,7 @@ function App() {
             <button className="rail-icon" aria-label="MCP" onClick={openMcp}><Plug size={17} /></button>
             <button className="rail-icon" aria-label="Configurações" onClick={openIntegrations}><Settings2 size={17} /></button>
           </div>
-          <div className="rail-bottom"><button className="rail-icon" aria-label="Ajuda" onClick={() => notify("Ctrl+Z desfaz · Ctrl+D duplica · Delete exclui · Shift+clique seleciona várias")}><CircleHelp size={17} /></button><div className="rail-line" /><button className="rail-icon"><div className="tiny-avatar">JD</div></button></div>
+          <div className="rail-bottom"><button className="rail-icon" aria-label="Ajuda" onClick={() => notify("Ctrl+Z desfaz · Ctrl+D duplica · Delete exclui · Shift+clique seleciona várias")}><CircleHelp size={17} /></button></div>
         </aside>
 
         <aside className="sidebar left-sidebar">
