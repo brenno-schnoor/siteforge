@@ -818,6 +818,7 @@ function App() {
   const [preview, setPreview] = useState(() => appPath() === "/preview");
   const [selectedColor, setSelectedColor] = useState("#b8ff3d");
   const [projectName, setProjectName] = useState("");
+  const [hasSavedProject, setHasSavedProject] = useState(false);
   const [font, setFont] = useState("Space Grotesk");
   const [toast, setToast] = useState("");
   const [zoom, setZoom] = useState(82);
@@ -933,7 +934,7 @@ function App() {
         if (user) {
           setAuthUser(user);
           const project = (await loadCloudProject()) as Partial<ProjectPayload> | null;
-          if (project?.pages?.length) setPages(project.pages);
+          if (project?.pages?.length) { setPages(project.pages); setHasSavedProject(true); }
           if (project?.layers?.length) setLayers(hydrateLayers(project.layers as Layer[]));
           if (project?.layersByPage) setLayersByPage(hydrateLayersByPage(project.layersByPage as Record<string, Layer[]>));
           if (project?.selectedColor) setSelectedColor(project.selectedColor);
@@ -974,6 +975,7 @@ function App() {
     setSaving(true);
     try {
       await saveCloudProject(payload);
+      setHasSavedProject(true);
       notify("Projeto sincronizado com sua conta");
     } catch {
       notify("Salvo localmente · sincronização indisponível");
@@ -1089,6 +1091,11 @@ function App() {
   };
 
   const createProject = () => {
+    // Por enquanto só é permitido 1 projeto por conta, para não sobrecarregar o banco de dados.
+    if (hasSavedProject) {
+      notify("No momento só é possível criar 1 projeto, para não pesar no banco de dados");
+      return;
+    }
     const nextPayload: ProjectPayload = { pages: starterPages, layers: serializableLayers(starterLayers), selectedColor: "#b8ff3d", font: "Space Grotesk" };
     setPages(starterPages);
     setLayersByPage({});
