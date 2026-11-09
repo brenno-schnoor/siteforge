@@ -645,3 +645,20 @@ html, body { max-width: 100%; overflow-x: hidden; }
   .toolbar-group, .toolbar-center { overflow-x: auto; max-width: 100%; flex-wrap: nowrap; }
   .bottom-dock { left: 10px; right: 10px; bottom: 10px; }
 }
+
+/* Cores de destaque escolhidas pelo usuário */
+.accent-picker { display: inline-flex; width: 28px; height: 28px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line-bright, rgba(255,255,255,.2)); cursor: pointer; }
+.accent-picker input, .accent-picker-site { width: 100%; height: 100%; border: 0; padding: 0; background: none; cursor: pointer; }
+.accent-picker-site { width: 40px; height: 22px; border-radius: 5px; }
+
+/* Animações e transições suaves */
+@keyframes panelIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes toastIn { from { opacity: 0; transform: translateY(10px) scale(.98); } to { opacity: 1; transform: none; } }
+.inspector-section, .sidebar-section { animation: panelIn .35s ease both; }
+.toast { animation: toastIn .25s ease both; }
+.tool-button, .icon-button, .secondary-button, .publish-button, .device-button, .swatch, .color-control, .add-page-dashed { transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.tool-button:active, .icon-button:active, .publish-button:active, .secondary-button:active { transform: scale(.97); }
+.swatch:hover { transform: scale(1.08); }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

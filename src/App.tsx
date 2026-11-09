@@ -32,6 +32,7 @@ import {
   Mail,
   ArrowRightLeft,
   Megaphone,
+  Download,
   Layers3,
   Lock,
   Maximize2,
@@ -585,6 +586,10 @@ function boxOf(layer: Layer, index: number): LayerBox {
   return layer.box ?? { x: 10 + (index % 6) * 4, y: 10 + (index % 6) * 4, w: 30, h: 12 };
 }
 
+// Formato de arquivo de projeto: SiteForge Project (.psf), um JSON com cabeçalho de formato e versão.
+const PSF_FORMAT = "siteforge-project";
+const PSF_VERSION = 1;
+
 function hydrateLayersByPage(map: Record<string, Layer[]>): Record<string, Layer[]> {
   return Object.fromEntries(Object.entries(map).map(([pageId, pageLayers]) => [pageId, hydrateLayers(pageLayers)]));
 }
@@ -819,6 +824,16 @@ function App() {
   const [selectedColor, setSelectedColor] = useState("#b8ff3d");
   const [projectName, setProjectName] = useState("");
   const [hasSavedProject, setHasSavedProject] = useState(false);
+  const psfInputRef = useRef<HTMLInputElement>(null);
+  const isDesktopApp = typeof window !== "undefined" && (window as unknown as { siteforgeDesktop?: boolean }).siteforgeDesktop === true;
+  // Cor de destaque da interface do editor (salva neste navegador ou aplicativo).
+  const [accent, setAccent] = useState<string>(() => {
+    try { return localStorage.getItem("siteforge-accent") || "#b8ff3d"; } catch { return "#b8ff3d"; }
+  });
+  useEffect(() => {
+    document.documentElement.style.setProperty("--lime", accent);
+    try { localStorage.setItem("siteforge-accent", accent); } catch { /* armazenamento indisponível */ }
+  }, [accent]);
   const [font, setFont] = useState("Space Grotesk");
   const [toast, setToast] = useState("");
   const [zoom, setZoom] = useState(82);
@@ -1090,9 +1105,39 @@ function App() {
     setPreview(path === "/preview");
   };
 
+  const saveFile = () => {
+    const payload: ProjectPayload = { name: projectName, pages, layers: serializableLayers(layers), layersByPage: serializeLayersByPage(layersByPage), selectedColor, font };
+    const doc = { format: PSF_FORMAT, version: PSF_VERSION, savedAt: new Date().toISOString(), project: payload };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(doc)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(projectName || "projeto").replace(/[^\w-]+/g, "-")}.psf`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    notify("Projeto salvo em arquivo .psf");
+  };
+
+  const openFile = async (file: File) => {
+    try {
+      const doc = JSON.parse(await file.text());
+      if (doc?.format !== PSF_FORMAT || typeof doc.version !== "number" || doc.version > PSF_VERSION) throw new Error("psf_invalid");
+      const project = doc.project as Partial<ProjectPayload>;
+      if (!Array.isArray(project.pages) || !Array.isArray(project.layers)) throw new Error("psf_invalid");
+      setPages(project.pages);
+      setLayers(hydrateLayers(project.layers as Layer[]));
+      if (project.layersByPage) setLayersByPage(hydrateLayersByPage(project.layersByPage as Record<string, Layer[]>));
+      if (project.selectedColor) setSelectedColor(project.selectedColor);
+      if (project.font) setFont(project.font);
+      setProjectName(typeof project.name === "string" ? project.name : file.name.replace(/\.psf$/i, ""));
+      notify("Projeto aberto do arquivo .psf");
+    } catch {
+      notify("Arquivo .psf inválido");
+    }
+  };
+
   const createProject = () => {
     // Por enquanto só é permitido 1 projeto por conta, para não sobrecarregar o banco de dados.
-    if (hasSavedProject) {
+    if (hasSavedProject && !isDesktopApp) {
       notify("No momento só é possível criar 1 projeto, para não pesar no banco de dados");
       return;
     }
@@ -1357,6 +1402,10 @@ function App() {
           <button className="icon-button subtle" aria-label={editorCopy[language].redo} title={editorCopy[language].redo} onClick={redo} disabled={redoStack.length === 0}><Redo2 size={15} /></button>
           <span className="top-divider" />
           <LanguageSelect value={language} onChange={setLanguage} />
+          <label className="accent-picker" title="Cor de destaque do editor"><input type="color" value={accent} onChange={(event) => setAccent(event.target.value)} aria-label="Cor de destaque do editor" /></label>
+          <button className="icon-button subtle" title="Salvar arquivo .psf" aria-label="Salvar arquivo .psf" onClick={saveFile}><Download size={15} /></button>
+          <button className="icon-button subtle" title="Abrir arquivo .psf" aria-label="Abrir arquivo .psf" onClick={() => psfInputRef.current?.click()}><Upload size={15} /></button>
+          <input ref={psfInputRef} type="file" accept=".psf,application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void openFile(file); event.currentTarget.value = ""; }} />
           <button className="icon-button subtle" aria-label={editorCopy[language].theme} title={editorCopy[language].theme} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button className="secondary-button" onClick={() => setPreview((value) => !value)}><Play size={14} fill="currentColor" /> {preview ? ui.backToEdit : ui.preview}</button>
           <button className="publish-button" onClick={async () => { await saveProject(); const url = URL.createObjectURL(buildZip(exportSite(pages, (pageId) => layersByPage[pageId] ?? starterLayers, selectedColor, font))); const link = document.createElement("a"); link.href = url; link.download = "siteforge-site.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); notify("Baixando o site exportado em .zip"); }}><Sparkles size={15} /> {saving ? ui.saving : ui.publish}</button>
@@ -1513,7 +1562,7 @@ function App() {
               ] as const).map((field) => (
                 <label key={field.key} className="property-field"><span>{field.label}</span><input type="number" min={field.min} max={field.max} disabled={!chosenLayer} value={chosenLayer?.[field.key] ?? field.fallback} onChange={(event) => { if (!chosenLayer) return; const value = Number(event.target.value); updateLayer(chosenLayer.id, field.key === "rotate" ? { rotate: value } : field.key === "radius" ? { radius: value } : field.key === "scale" ? { scale: value } : { opacity: value }); }} /></label>
               ))}</div></div>
-            <div className="inspector-section"><div className="inspector-section-title">Appearance <ChevronDown size={14} /></div><div className="color-row"><span>Fill</span><button className="color-control" onClick={() => setSelectedColor(selectedColor === "#b8ff3d" ? "#8f9dff" : "#b8ff3d")}><span style={{ background: selectedColor }} />{selectedColor}<ChevronRight size={13} /></button></div><div className="color-row"><span>Gradient</span><button className="gradient-control"><span />linear · 135° <ChevronRight size={13} /></button></div><div className="swatch-row">{colorSwatches.map((color) => <button key={color} className={`swatch ${selectedColor === color ? "active" : ""}`} style={{ background: color }} onClick={() => setSelectedColor(color)} aria-label={`Selecionar cor ${color}`} />)}<button className="swatch-add"><Plus size={13} /></button></div></div>
+            <div className="inspector-section"><div className="inspector-section-title">Appearance <ChevronDown size={14} /></div><div className="color-row"><span>Fill</span><button className="color-control" onClick={() => setSelectedColor(selectedColor === "#b8ff3d" ? "#8f9dff" : "#b8ff3d")}><span style={{ background: selectedColor }} />{selectedColor}<ChevronRight size={13} /></button></div><div className="color-row"><span>Destaque do site</span><input type="color" className="accent-picker-site" value={selectedColor} onChange={(event) => setSelectedColor(event.target.value)} aria-label="Cor de destaque do site" /></div><div className="color-row"><span>Gradient</span><button className="gradient-control"><span />linear · 135° <ChevronRight size={13} /></button></div><div className="swatch-row">{colorSwatches.map((color) => <button key={color} className={`swatch ${selectedColor === color ? "active" : ""}`} style={{ background: color }} onClick={() => setSelectedColor(color)} aria-label={`Selecionar cor ${color}`} />)}<button className="swatch-add"><Plus size={13} /></button></div></div>
             <div className="inspector-section"><div className="inspector-section-title">Typography <ChevronDown size={14} /></div><div className="select-field"><Type size={13} /><select value={font} onChange={(event) => setFont(event.target.value)}><option>Space Grotesk</option><option>DM Sans</option><option>Instrument Serif</option></select><ChevronDown size={13} /></div><div className="property-grid"><Property label="Weight" value="Medium" /><Property label="Size" value="64 px" /><Property label="Line" value="0.95" /><Property label="Track" value="-0.03em" /></div></div>
             {chosenLayer?.kind === "scene" && <div className="inspector-section"><div className="inspector-section-title">Forma 3D <ChevronDown size={14} /></div><div className="shape-grid">{(Object.keys(shapeOptions) as Shape3D[]).map((shape) => <button key={shape} className={chosenLayer.shape === shape || (!chosenLayer.shape && shape === "orb") ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { shape })}>{shapeOptions[shape]}</button>)}</div></div>}
             {chosenLayer && (chosenLayer.kind === "video" || chosenLayer.kind === "map") && <div className="inspector-section"><div className="inspector-section-title">Conteúdo <ChevronDown size={14} /></div><label className="property-field stacked"><span>{chosenLayer.kind === "video" ? "Link do vídeo (YouTube ou Vimeo, https)" : "Endereço no mapa"}</span><input value={chosenLayer.src ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { src: event.target.value })} /></label></div>}
