@@ -665,7 +665,7 @@ html, body { max-width: 100%; overflow-x: hidden; }
 
 /* Animações do site público */
 .cursor-trail { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
-.scroll-progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: var(--lime); transform-origin: 0 50%; transform: scaleX(0); z-index: 61; pointer-events: none; }
+.scroll-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--lime); transform-origin: 0 50%; transform: scaleX(0); z-index: 61; pointer-events: none; }
 .reveal { opacity: 0; translate: 0 28px; transition: opacity .8s ease, translate .8s cubic-bezier(.2, .7, .2, 1); }
 .reveal.is-visible { opacity: 1; translate: 0 0; }
 .home-hero .hero-copy { will-change: transform; }

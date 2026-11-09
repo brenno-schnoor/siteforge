@@ -87,14 +87,20 @@ Para o login e a persistência, configure no ambiente de build as variáveis `VI
 
 ```text
 src/
-  App.tsx          Editor protegido: páginas, camadas, elementos, SEO, idiomas e publicação
-  PublicSite.tsx   Site público e páginas institucionais
+  App.tsx          Editor protegido: páginas, camadas, elementos, SEO, idiomas,
+                   cor de destaque, arquivos .psf e publicação
+  PublicSite.tsx   Site público, páginas institucionais e animações (rastro, revelação, parallax)
   NotFound.tsx     Página 404
   main.tsx         Roteamento por pathname
   paths.ts         Caminhos com o prefixo do GitHub Pages
   supabase.ts      Login com Google, sessão e salvamento de projetos
   styles.css       Sistema visual e responsividade
   vite-env.d.ts    Tipos das variáveis de ambiente
+desktop/
+  main.js          Aplicativo Electron: janela, servidor local, menu e verificador de atualizações
+  preload.js       Ponte segura entre o editor e o aplicativo
+  package.json     Configuração do electron-builder (Windows, macOS e Linux)
+  README.md        Como rodar e gerar os instaladores
 server/
   index.mjs        Servidor Express de apoio ao desenvolvimento
   db.mjs           Schema auxiliar (não usado pelo site publicado)
@@ -104,12 +110,13 @@ public/
   favicon.svg      Ícone do site (cópia de assets/siteforge_icon.svg)
   manus-routes.json Manifesto de rotas do Preview
 assets/
-  siteforge_icon.svg          Ícone da marca em SVG
-  siteforge_home_ref.png      Referência visual da home
+  siteforge_icon.svg               Ícone da marca em SVG
+  siteforge_home_ref.png           Referência visual da home
   siteforge_ad_1024x576_audio.mp4  Vídeo de anúncio
-  pages_imgs/                 Capturas das páginas (root, work, about, integrations)
+  pages_imgs/                      Capturas das páginas (root, work, about, integrations)
 .github/workflows/
-  deploy.yml       Build e publicação no GitHub Pages
+  deploy.yml         Build e publicação no GitHub Pages
+  desktop-build.yml  Instaladores do aplicativo (manual ou tag desktop-v*)
 ```
 
 ## Como contribuir com uma nova versão
