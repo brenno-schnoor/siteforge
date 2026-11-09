@@ -31,6 +31,7 @@ import {
   Share2,
   Mail,
   ArrowRightLeft,
+  Megaphone,
   Layers3,
   Lock,
   Maximize2,
@@ -67,10 +68,107 @@ import { beginGoogleLogin, getCurrentUser, loadCloudProject, saveCloudProject, s
 
 type Device = "desktop" | "tablet" | "mobile";
 type InspectorTab = "design" | "animate" | "seo";
-type LayerKind = "scene" | "text" | "button" | "image" | "group" | "language" | "video" | "map" | "shape" | "marquee" | "social" | "form";
+type LayerKind = "scene" | "text" | "button" | "image" | "group" | "language" | "video" | "map" | "shape" | "marquee" | "social" | "form" | "ads";
 type Shape3D = "orb" | "cube" | "torus" | "pyramid" | "knot" | "cylinder";
 const shapeOptions: Record<Shape3D, string> = { orb: "Esfera", cube: "Cubo", torus: "Anel", pyramid: "Pirâmide", knot: "Nó", cylinder: "Cilindro" };
 const siteLanguages: Record<string, string> = { pt: "Português", en: "English", es: "Español", fr: "Français", de: "Deutsch", it: "Italiano", ja: "日本語" };
+
+function AdSlot({ publisher, slot, live }: { publisher: string; slot: string; live: boolean }) {
+  const valid = /^ca-pub-\d{10,20}$/.test(publisher) && /^\d{5,20}$/.test(slot);
+  useEffect(() => {
+    if (!live || !valid) return;
+    if (!document.querySelector(`script[data-adsense="${publisher}"]`)) {
+      const script = document.createElement("script");
+      script.async = true;
+      script.crossOrigin = "anonymous";
+      script.src = `https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${publisher}`;
+      script.dataset.adsense = publisher;
+      document.head.appendChild(script);
+    }
+    try { (window as unknown as { adsbygoogle: unknown[] }).adsbygoogle = (window as unknown as { adsbygoogle?: unknown[] }).adsbygoogle ?? []; (window as unknown as { adsbygoogle: unknown[] }).adsbygoogle.push({}); } catch { /* bloqueador de anúncios */ }
+  }, [live, valid, publisher, slot]);
+  if (!live || !valid) return <div className="edit-embed-empty">Anúncio AdSense: informe o ID do editor (ca-pub-…) e o ID do bloco</div>;
+  return <ins className="adsbygoogle" style={{ display: "block", width: "100%", height: "100%" }} data-ad-client={publisher} data-ad-slot={slot} data-ad-format="auto" data-full-width-responsive="true" />;
+}
+
+// Gera o .zip sem compressão (formato ZIP padrão) para os arquivos de SEO do projeto.
+const crcTable = (() => {
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+  return table;
+})();
+
+function crc32(bytes: Uint8Array) {
+  let c = 0xffffffff;
+  for (const byte of bytes) c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function buildZip(files: { name: string; content: string }[]): Blob {
+  const encoder = new TextEncoder();
+  const parts: Uint8Array[] = [];
+  const central: Uint8Array[] = [];
+  let offset = 0;
+  for (const file of files) {
+    const name = encoder.encode(file.name);
+    const data = encoder.encode(file.content);
+    const crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    local.setUint32(0, 0x04034b50, true); local.setUint16(4, 20, true); local.setUint16(6, 0x0800, true);
+    local.setUint16(8, 0, true); local.setUint16(10, 0, true); local.setUint16(12, 0x21, true);
+    local.setUint32(14, crc, true); local.setUint32(18, data.length, true); local.setUint32(22, data.length, true);
+    local.setUint16(26, name.length, true); local.setUint16(28, 0, true);
+    parts.push(new Uint8Array(local.buffer), name, data);
+    const entry = new DataView(new ArrayBuffer(46));
+    entry.setUint32(0, 0x02014b50, true); entry.setUint16(4, 20, true); entry.setUint16(6, 20, true); entry.setUint16(8, 0x0800, true);
+    entry.setUint16(10, 0, true); entry.setUint16(12, 0, true); entry.setUint16(14, 0x21, true); entry.setUint32(16, crc, true);
+    entry.setUint32(20, data.length, true); entry.setUint32(24, data.length, true); entry.setUint16(28, name.length, true); entry.setUint32(42, offset, true);
+    central.push(new Uint8Array(entry.buffer), name);
+    offset += 30 + name.length + data.length;
+  }
+  const centralSize = central.reduce((total, chunk) => total + chunk.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, centralSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)] as BlobPart[], { type: "application/zip" });
+}
+
+const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function buildSeoFiles(pages: Page[]): { name: string; content: string }[] {
+  const domain = "https://seu-dominio.com";
+  const files = pages.map((page) => {
+    const title = page.seoTitle || page.name;
+    const description = page.seoDescription ?? "";
+    const keywords = page.seoKeywords ?? "";
+    const target = page.path === "/" ? "index.html" : `${page.path.replace(/^\//, "")}/index.html`;
+    const content = `<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <meta name="description" content="${escapeHtml(description)}" />
+  <meta name="keywords" content="${escapeHtml(keywords)}" />
+  <link rel="canonical" href="${domain}${page.path}" />
+  <meta property="og:title" content="${escapeHtml(title)}" />
+  <meta property="og:description" content="${escapeHtml(description)}" />
+  <meta property="og:url" content="${domain}${page.path}" />
+</head>
+<body>
+  <h1>${escapeHtml(title)}</h1>
+  <p>${escapeHtml(description)}</p>
+</body>
+</html>
+`;
+    return { name: target, content };
+  });
+  const urls = pages.map((page) => `  <url><loc>${domain}${page.path}</loc></url>`).join("\n");
+  files.push({ name: "sitemap.xml", content: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n` });
+  files.push({ name: "robots.txt", content: `User-agent: *\nAllow: /\n\nSitemap: ${domain}/sitemap.xml\n` });
+  files.push({ name: "seo.json", content: JSON.stringify(pages.map((page) => ({ path: page.path, title: page.seoTitle || page.name, description: page.seoDescription ?? "", keywords: page.seoKeywords ?? "" })), null, 2) });
+  return files;
+}
 
 // Converte um link do YouTube ou Vimeo em endereço de incorporação (somente https).
 function embedUrl(input: string): string {
@@ -92,6 +190,7 @@ const elementItems: { kind: LayerKind; name: string; icon: typeof Box; detail: s
   { kind: "shape", name: "Forma", icon: Circle, detail: "Forma · 2D", extra: { radius: 50, box: { x: 40, y: 40, w: 14, h: 24 } } },
   { kind: "marquee", name: "Texto rolante", icon: ArrowRightLeft, detail: "Texto · rolagem", extra: { text: "Novidade · Promoção · Novidade", box: { x: 0, y: 88, w: 100, h: 6 } } },
   { kind: "social", name: "Redes sociais", icon: Share2, detail: "Links · redes", extra: { text: "Instagram, LinkedIn, X", box: { x: 66, y: 88, w: 32, h: 6 } } },
+  { kind: "ads", name: "Anúncio AdSense", icon: Megaphone, detail: "AdSense · bloco", extra: { src: "", text: "", box: { x: 68, y: 72, w: 28, h: 18 } } },
   { kind: "form", name: "Formulário de contato", icon: Mail, detail: "Formulário · contato", extra: { box: { x: 55, y: 30, w: 36, h: 50 } } },
 ];
 
@@ -217,7 +316,7 @@ type Layer = {
   scale?: number;
   glow?: boolean;
   intensity?: number;
-  trigger?: "move";
+  trigger?: "move" | "scroll";
   shape?: Shape3D;
   languages?: string[];
   languageStyle?: "select" | "buttons";
@@ -254,6 +353,7 @@ function iconForLayerKind(kind: LayerKind) {
   if (kind === "marquee") return ArrowRightLeft;
   if (kind === "social") return Share2;
   if (kind === "form") return Mail;
+  if (kind === "ads") return Megaphone;
   return Box;
 }
 
@@ -596,6 +696,16 @@ function App() {
     if (!meta) { meta = document.createElement("meta"); meta.name = "description"; document.head.appendChild(meta); }
     meta.content = activePage.seoDescription ?? "";
   }, [preview, activePage?.id, activePage?.name, activePage?.seoTitle, activePage?.seoDescription]);
+
+  // Animação por scroll: progresso de 0 a 1 conforme a página rola (somente na pré-visualização).
+  const [scrollProgress, setScrollProgress] = useState(0);
+  useEffect(() => {
+    if (!preview) return;
+    const onScroll = () => setScrollProgress(Math.min(1, Math.max(0, window.scrollY / Math.max(1, window.innerHeight * 0.8))));
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [preview]);
   const [autoTranslated, setAutoTranslated] = useState<Record<string, string>>({});
   const baseTextOf = (layer: Layer) => layer.kind === "button"
     ? (layer.text ?? "Explore the system")
@@ -1070,7 +1180,7 @@ function App() {
           <LanguageSelect value={language} onChange={setLanguage} />
           <button className="icon-button subtle" aria-label={editorCopy[language].theme} title={editorCopy[language].theme} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button className="secondary-button" onClick={() => setPreview((value) => !value)}><Play size={14} fill="currentColor" /> {preview ? ui.backToEdit : ui.preview}</button>
-          <button className="publish-button" onClick={async () => { await saveProject(); window.open(SOURCE_ZIP_URL, "_blank", "noopener"); notify("Baixando o projeto completo em .zip"); }}><Sparkles size={15} /> {saving ? ui.saving : ui.publish}</button>
+          <button className="publish-button" onClick={async () => { await saveProject(); const url = URL.createObjectURL(buildZip(buildSeoFiles(pages))); const link = document.createElement("a"); link.href = url; link.download = "siteforge-seo.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); notify("Baixando o .zip com SEO do projeto"); }}><Sparkles size={15} /> {saving ? ui.saving : ui.publish}</button>
           <button className={`avatar-button ${authUser ? "signed-in" : ""}`} aria-label={authUser ? "Abrir conta" : "Entrar"} onClick={() => setAuthOpen(true)}>{authUser ? (authUser.name || authUser.email).slice(0, 2).toUpperCase() : <LogIn size={14} />}</button>
         </div>
       </header>
@@ -1149,7 +1259,7 @@ function App() {
                     <div
                       key={layer.id}
                       className={`edit-layer edit-${layer.kind}${selected ? " is-selected" : ""}${layer.locked ? " is-locked" : ""}${preview ? " is-preview" : ""}${preview && layer.linkPageId ? " is-linked" : ""}`}
-                      style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, zIndex: layers.length - index, display: layer.visible ? undefined : "none", opacity: (layer.opacity ?? 100) / 100, boxShadow: layer.glow ? `0 0 48px ${selectedColor}66` : undefined, borderRadius: layer.radius ?? 0, transform: `rotate(${layer.rotate ?? 0}deg) scale(${layer.scale ?? 1}) translate(${follow ? (pointer.x - 50) * ((layer.intensity ?? 12) / 100) : 0}%, ${follow ? (pointer.y - 50) * ((layer.intensity ?? 12) / 100) : 0}%)` }}
+                      style={{ left: `${box.x}%`, top: `${box.y}%`, width: `${box.w}%`, height: `${box.h}%`, zIndex: layers.length - index, display: layer.visible ? undefined : "none", opacity: ((layer.opacity ?? 100) / 100) * (preview && !!layer.follow && layer.trigger === "scroll" ? Math.max(0.15, scrollProgress) : 1), boxShadow: layer.glow ? `0 0 48px ${selectedColor}66` : undefined, borderRadius: layer.radius ?? 0, transform: `rotate(${layer.rotate ?? 0}deg) scale(${layer.scale ?? 1}) translate(${follow ? (pointer.x - 50) * ((layer.intensity ?? 12) / 100) : 0}%, ${follow ? (pointer.y - 50) * ((layer.intensity ?? 12) / 100) : 0}%) translateY(${preview && !!layer.follow && layer.trigger === "scroll" ? (1 - scrollProgress) * (layer.intensity ?? 12) : 0}px)` }}
                       onPointerDown={preview || editing ? undefined : (event) => beginLayerPointer(event, layer, index, "move")}
                       onDoubleClick={preview || layer.locked || (layer.kind !== "text" && layer.kind !== "button") ? undefined : () => setEditingLayerId(layer.id)}
                       onClick={preview && layer.linkPageId ? () => goToPage(layer.linkPageId as string) : undefined}
@@ -1189,6 +1299,8 @@ function App() {
                         <div className="edit-social">{(layer.text ?? "").split(",").map((name) => name.trim()).filter(Boolean).map((name) => <span key={name}>{name}</span>)}</div>
                       ) : layer.kind === "form" ? (
                         <form className={`edit-form${preview ? " is-live" : ""}`} onSubmit={(event) => event.preventDefault()}><input placeholder="Nome" /><input placeholder="E-mail" type="email" /><textarea placeholder="Mensagem" /><button type="button">Enviar</button></form>
+                      ) : layer.kind === "ads" ? (
+                        <div className="edit-ads"><AdSlot publisher={layer.src ?? ""} slot={layer.text ?? ""} live={preview} /></div>
                       ) : layer.kind === "image" ? (
                         <div className="edit-image" style={layer.src ? { backgroundImage: `url(${layer.src})`, backgroundSize: "cover", backgroundPosition: "center" } : undefined} />
                       ) : (
@@ -1227,6 +1339,7 @@ function App() {
             {chosenLayer?.kind === "scene" && <div className="inspector-section"><div className="inspector-section-title">Forma 3D <ChevronDown size={14} /></div><div className="shape-grid">{(Object.keys(shapeOptions) as Shape3D[]).map((shape) => <button key={shape} className={chosenLayer.shape === shape || (!chosenLayer.shape && shape === "orb") ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { shape })}>{shapeOptions[shape]}</button>)}</div></div>}
             {chosenLayer && (chosenLayer.kind === "video" || chosenLayer.kind === "map") && <div className="inspector-section"><div className="inspector-section-title">Conteúdo <ChevronDown size={14} /></div><label className="property-field"><span>{chosenLayer.kind === "video" ? "Link do vídeo (YouTube ou Vimeo, https)" : "Endereço no mapa"}</span><input value={chosenLayer.src ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { src: event.target.value })} /></label></div>}
             {chosenLayer && (chosenLayer.kind === "marquee" || chosenLayer.kind === "social") && <div className="inspector-section"><div className="inspector-section-title">Conteúdo <ChevronDown size={14} /></div><label className="property-field"><span>{chosenLayer.kind === "marquee" ? "Texto que rola" : "Redes (separadas por vírgula)"}</span><input value={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { text: event.target.value })} /></label></div>}
+            {chosenLayer?.kind === "ads" && <div className="inspector-section"><div className="inspector-section-title">AdSense <ChevronDown size={14} /></div><label className="property-field"><span>ID do editor (ca-pub-…)</span><input value={chosenLayer.src ?? ""} placeholder="ca-pub-0000000000000000" onChange={(event) => updateLayer(chosenLayer.id, { src: event.target.value.trim() })} /></label><label className="property-field"><span>ID do bloco de anúncio</span><input value={chosenLayer.text ?? ""} placeholder="1234567890" onChange={(event) => updateLayer(chosenLayer.id, { text: event.target.value.trim() })} /></label><p className="translation-hint">Os anúncios aparecem só na pré-visualização, depois que sua conta AdSense for aprovada para o domínio.</p></div>}
             {chosenLayer?.kind === "language" && <div className="inspector-section"><div className="inspector-section-title">Idiomas do site <ChevronDown size={14} /></div><label className="property-field translation-field"><span>Idioma original dos textos</span><select value={chosenLayer.sourceLanguage ?? "pt"} onChange={(event) => updateLayer(chosenLayer.id, { sourceLanguage: event.target.value })}>{Object.keys(siteLanguages).map((code) => <option key={code} value={code}>{siteLanguages[code]}</option>)}</select></label><div className="shape-grid lang-style-grid"><button className={(chosenLayer.languageStyle ?? "select") === "select" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "select" })}>Menu</button><button className={chosenLayer.languageStyle === "buttons" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "buttons" })}>Botões</button></div><div className="shape-grid">{Object.keys(siteLanguages).map((code) => { const active = (chosenLayer.languages ?? []).includes(code); return <button key={code} className={active ? "active" : ""} onClick={() => { const current = chosenLayer.languages ?? []; updateLayer(chosenLayer.id, { languages: active ? current.filter((item) => item !== code) : [...current, code] }); }}>{siteLanguages[code]}</button>; })}</div></div>}
             {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && <div className="inspector-section"><div className="inspector-section-title">Tradução <ChevronDown size={14} /></div><div className="effect-row"><div><strong>Não traduzir</strong><span>Mantém este elemento no idioma original</span></div><button className={`toggle ${chosenLayer.noTranslate ? "active" : ""}`} onClick={() => updateLayer(chosenLayer.id, { noTranslate: !chosenLayer.noTranslate })}><span /></button></div></div>}
             {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && siteLanguageCodes.length > 0 && !chosenLayer.noTranslate && <div className="inspector-section"><div className="inspector-section-title">Traduções <ChevronDown size={14} /></div><p className="translation-hint">Os textos são traduzidos automaticamente ao escolher um idioma no site. Escreva abaixo se quiser substituir a tradução automática.</p>{siteLanguageCodes.map((code) => <label key={code} className="property-field translation-field"><span>{siteLanguages[code]}</span><input value={chosenLayer.translations?.[code] ?? ""} placeholder={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { translations: { ...(chosenLayer.translations ?? {}), [code]: event.target.value } })} /></label>)}</div>}
@@ -1239,7 +1352,7 @@ function App() {
               <div className="seo-preview"><span className="seo-url">{activePage.path}</span><strong>{activePage.seoTitle || activePage.name}</strong><p>{activePage.seoDescription || "Sem descrição. Buscadores vão mostrar um trecho do texto da página."}</p></div>
               <p className="translation-hint">Esses dados são salvos no projeto e aplicados na pré-visualização (título da aba e descrição).</p>
             </div>
-          </div> : <div className="inspector-scroll"><div className="animation-card"><div className="animation-icon"><MousePointer2 size={16} /></div><div><span className="eyebrow">Pointer interaction</span><h3>Follow cursor</h3><p>Object subtly leans toward the pointer position.</p></div><button className={`toggle ${chosenLayer?.follow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { follow: !chosenLayer.follow }); }}><span /></button></div><div className="inspector-section"><div className="inspector-section-title">Trigger <ChevronDown size={14} /></div><div className="select-field"><MousePointer2 size={13} /><select value="move" onChange={() => undefined}><option value="move">On mouse move</option></select><ChevronDown size={13} /></div></div><div className="inspector-section"><div className="inspector-section-title">Motion curve <ChevronDown size={14} /></div><div className="curve-preview"><span /><span /><span /><span /><span /></div><div className="curve-labels"><span>Gentle</span><span>Spring</span></div></div><div className="inspector-section"><div className="inspector-section-title">Response <ChevronDown size={14} /></div><label className="property-field"><span>Intensity %</span><input type="number" min={0} max={100} disabled={!chosenLayer} value={chosenLayer?.intensity ?? 12} onChange={(event) => { if (chosenLayer) updateLayer(chosenLayer.id, { intensity: Number(event.target.value) }); }} /></label><Property label="Duration" value="800 ms" /><Property label="Delay" value="0 ms" /></div></div>}
+          </div> : <div className="inspector-scroll"><div className="animation-card"><div className="animation-icon"><MousePointer2 size={16} /></div><div><span className="eyebrow">Pointer interaction</span><h3>Follow cursor</h3><p>Object subtly leans toward the pointer position.</p></div><button className={`toggle ${chosenLayer?.follow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { follow: !chosenLayer.follow }); }}><span /></button></div><div className="inspector-section"><div className="inspector-section-title">Trigger <ChevronDown size={14} /></div><div className="select-field"><MousePointer2 size={13} /><select value={chosenLayer?.trigger ?? "move"} disabled={!chosenLayer} onChange={(event) => { if (chosenLayer) updateLayer(chosenLayer.id, { trigger: event.target.value as "move" | "scroll" }); }}><option value="move">Ao mover o mouse</option><option value="scroll">Ao rolar a página</option></select><ChevronDown size={13} /></div></div><div className="inspector-section"><div className="inspector-section-title">Motion curve <ChevronDown size={14} /></div><div className="curve-preview"><span /><span /><span /><span /><span /></div><div className="curve-labels"><span>Gentle</span><span>Spring</span></div></div><div className="inspector-section"><div className="inspector-section-title">Response <ChevronDown size={14} /></div><label className="property-field"><span>Intensity %</span><input type="number" min={0} max={100} disabled={!chosenLayer} value={chosenLayer?.intensity ?? 12} onChange={(event) => { if (chosenLayer) updateLayer(chosenLayer.id, { intensity: Number(event.target.value) }); }} /></label><Property label="Duration" value="800 ms" /><Property label="Delay" value="0 ms" /></div></div>}
           <div className="inspector-footer"><button className="delete-button" onClick={deleteSelectedLayer}><Trash2 size={14} /> Delete layer</button><span className="muted">{selectedLayer?.locked ? "Locked" : "Editable"}</span></div>
         </aside>
       </div>
