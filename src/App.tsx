@@ -135,40 +135,6 @@ function buildZip(files: { name: string; content: string }[]): Blob {
 
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function buildSeoFiles(pages: Page[]): { name: string; content: string }[] {
-  const domain = "https://seu-dominio.com";
-  const files = pages.map((page) => {
-    const title = page.seoTitle || page.name;
-    const description = page.seoDescription ?? "";
-    const keywords = page.seoKeywords ?? "";
-    const target = page.path === "/" ? "index.html" : `${page.path.replace(/^\//, "")}/index.html`;
-    const content = `<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${escapeHtml(title)}</title>
-  <meta name="description" content="${escapeHtml(description)}" />
-  <meta name="keywords" content="${escapeHtml(keywords)}" />
-  <link rel="canonical" href="${domain}${page.path}" />
-  <meta property="og:title" content="${escapeHtml(title)}" />
-  <meta property="og:description" content="${escapeHtml(description)}" />
-  <meta property="og:url" content="${domain}${page.path}" />
-</head>
-<body>
-  <h1>${escapeHtml(title)}</h1>
-  <p>${escapeHtml(description)}</p>
-</body>
-</html>
-`;
-    return { name: target, content };
-  });
-  const urls = pages.map((page) => `  <url><loc>${domain}${page.path}</loc></url>`).join("\n");
-  files.push({ name: "sitemap.xml", content: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n` });
-  files.push({ name: "robots.txt", content: `User-agent: *\nAllow: /\n\nSitemap: ${domain}/sitemap.xml\n` });
-  files.push({ name: "seo.json", content: JSON.stringify(pages.map((page) => ({ path: page.path, title: page.seoTitle || page.name, description: page.seoDescription ?? "", keywords: page.seoKeywords ?? "" })), null, 2) });
-  return files;
-}
 
 // Converte um link do YouTube ou Vimeo em endereço de incorporação (somente https).
 function embedUrl(input: string): string {
@@ -193,6 +159,178 @@ const elementItems: { kind: LayerKind; name: string; icon: typeof Box; detail: s
   { kind: "ads", name: "Anúncio AdSense", icon: Megaphone, detail: "AdSense · bloco", extra: { src: "", text: "", box: { x: 68, y: 72, w: 28, h: 18 } } },
   { kind: "form", name: "Formulário de contato", icon: Mail, detail: "Formulário · contato", extra: { box: { x: 55, y: 30, w: 36, h: 50 } } },
 ];
+
+// Exporta o site montado no editor como arquivos estáticos (HTML, CSS e JS embutidos em cada página).
+type ExportLayers = (pageId: string) => Layer[];
+
+const exportClientScript = [
+  "function tr(text,from,to){var k='sf:'+from+':'+to+':'+text;try{var c=localStorage.getItem(k);if(c)return Promise.resolve(c);}catch(e){}",
+  "return fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(text)+'&langpair='+from+'|'+to).then(function(r){return r.json();}).then(function(j){var t=j&&j.responseData&&j.responseData.translatedText;if(!t||/MYMEMORY WARNING|INVALID|QUERY LENGTH/i.test(t))return text;try{localStorage.setItem(k,t);}catch(e){}return t;});}",
+  "function setLang(code){document.documentElement.lang=code;document.querySelectorAll('.tx').forEach(function(el){var on=el.getAttribute('data-lang')===code;el.hidden=!on;if(on&&el.getAttribute('data-auto')==='1'){el.setAttribute('data-auto','0');tr(el.getAttribute('data-base'),el.getAttribute('data-from'),code).then(function(t){el.textContent=t;}).catch(function(){});}});document.querySelectorAll('[data-lang-btn]').forEach(function(b){b.classList.toggle('active',b.getAttribute('data-lang-btn')===code);});var s=document.querySelector('select.lang-select');if(s)s.value=code;}",
+  "var first=document.querySelector('.tx');if(first){setLang(first.getAttribute('data-from'));}",
+  "var motion=[].slice.call(document.querySelectorAll('[data-motion]'));",
+  "addEventListener('pointermove',function(e){var x=e.clientX/innerWidth-.5,y=e.clientY/innerHeight-.5;motion.forEach(function(el){if(el.getAttribute('data-motion')==='move'){var k=+el.getAttribute('data-intensity')/100;el.style.setProperty('--mx',(x*100*k)+'%');el.style.setProperty('--my',(y*100*k)+'%');}});});",
+  "addEventListener('scroll',function(){var p=Math.min(1,Math.max(0,scrollY/Math.max(1,innerHeight*.8)));motion.forEach(function(el){if(el.getAttribute('data-motion')==='scroll'){var k=+el.getAttribute('data-intensity');el.style.setProperty('--sy',((1-p)*k)+'px');el.style.opacity=String(+el.getAttribute('data-op')*Math.max(.15,p));}});},{passive:true});",
+  "document.querySelectorAll('[data-lang-btn]').forEach(function(b){b.addEventListener('click',function(){setLang(b.getAttribute('data-lang-btn'));});});",
+  "document.querySelectorAll('select.lang-select').forEach(function(s){s.addEventListener('change',function(){setLang(s.value);});});",
+].join("\n");
+
+const exportSceneScript = [
+  "import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';",
+  "function geo(shape){switch(shape){",
+  "case 'cube':return new THREE.BoxGeometry(1.7,1.7,1.7);",
+  "case 'torus':return new THREE.TorusGeometry(.95,.4,32,96);",
+  "case 'pyramid':return new THREE.ConeGeometry(1.25,2.3,4);",
+  "case 'knot':return new THREE.TorusKnotGeometry(.8,.28,160,24);",
+  "case 'cylinder':return new THREE.CylinderGeometry(.9,.9,2,48);",
+  "default:return new THREE.IcosahedronGeometry(1.18,4);}}",
+  "document.querySelectorAll('.scene').forEach(function(el){",
+  "var r=new THREE.WebGLRenderer({antialias:true,alpha:true});el.appendChild(r.domElement);",
+  "var scene=new THREE.Scene();var cam=new THREE.PerspectiveCamera(45,1,.1,100);cam.position.z=5;",
+  "var mesh=new THREE.Mesh(geo(el.getAttribute('data-shape')),new THREE.MeshStandardMaterial({color:el.getAttribute('data-color'),roughness:.35,metalness:.2}));scene.add(mesh);",
+  "var light=new THREE.DirectionalLight(0xffffff,2);light.position.set(2,3,4);scene.add(light);scene.add(new THREE.AmbientLight(0xffffff,.5));",
+  "function resize(){var w=el.clientWidth||1,h=el.clientHeight||1;r.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();}",
+  "resize();addEventListener('resize',resize);",
+  "(function loop(){mesh.rotation.x+=.004;mesh.rotation.y+=.006;r.render(scene,cam);requestAnimationFrame(loop);})();",
+  "});",
+].join("\n");
+
+function exportSite(pages: Page[], layersFor: ExportLayers, color: string, font: string): { name: string; content: string }[] {
+  const domain = "https://seu-dominio.com";
+  const depthOf = (page: Page) => page.path.split("/").filter(Boolean).length;
+  const fileOf = (page: Page) => (page.path === "/" ? "index.html" : `${page.path.replace(/^\//, "")}/index.html`);
+  const hrefTo = (from: Page, targetId: string) => {
+    const target = pages.find((page) => page.id === targetId);
+    if (!target) return "#";
+    const prefix = "../".repeat(depthOf(from));
+    return target.path === "/" ? (prefix || "./") : `${prefix}${target.path.replace(/^\//, "")}/`;
+  };
+  const embed = (input: string) => embedUrl(input);
+  const files: { name: string; content: string }[] = [];
+
+  for (const page of pages) {
+    const layers = layersFor(page.id);
+    const languageLayer = layers.find((layer) => layer.kind === "language");
+    const codes = languageLayer?.languages ?? [];
+    const source = languageLayer?.sourceLanguage ?? "pt";
+    const count = layers.length;
+    const title = page.seoTitle || page.name;
+    const description = page.seoDescription ?? "";
+
+    const body = layers.map((layer, index) => {
+      if (layer.visible === false) return "";
+      const box = layer.box ?? { x: 0, y: 0, w: 10, h: 10 };
+      const motion = layer.follow ? ` data-motion="${layer.trigger ?? "move"}" data-intensity="${layer.intensity ?? 12}" data-op="${(layer.opacity ?? 100) / 100}"` : "";
+      const style = `left:${box.x}%;top:${box.y}%;width:${box.w}%;height:${box.h}%;z-index:${count - index};order:${count - index};--r:${layer.rotate ?? 0}deg;--s:${layer.scale ?? 1};opacity:${(layer.opacity ?? 100) / 100};border-radius:${layer.radius ?? 0}${layer.kind === "shape" ? "%" : "px"};${layer.glow ? `box-shadow:0 0 48px ${color}66;` : ""}`;
+      const base = layer.text ?? layer.name;
+      let inner = "";
+      if (layer.kind === "text" || layer.kind === "button") {
+        if (codes.length === 0) {
+          inner = `<span class="tx">${escapeHtml(base)}</span>`;
+        } else {
+          inner = codes.map((code) => {
+            const manual = layer.translations?.[code];
+            const auto = !layer.noTranslate && code !== source && !manual ? "1" : "0";
+            const text = manual || base;
+            return `<span class="tx" data-lang="${code}" data-from="${source}" data-base="${escapeHtml(base)}" data-auto="${auto}" hidden>${escapeHtml(text)}</span>`;
+          }).join("");
+        }
+      } else if (layer.kind === "image") {
+        inner = layer.src ? `<div class="img" role="img" aria-label="${escapeHtml(layer.alt ?? "")}" style="background-image:url('${layer.src.replace(/'/g, "%27")}')"></div>` : "";
+      } else if (layer.kind === "video") {
+        const url = embed(layer.src ?? "");
+        inner = url ? `<iframe src="${url}" title="${escapeHtml(layer.name)}" loading="lazy" allowfullscreen></iframe>` : "";
+      } else if (layer.kind === "map") {
+        inner = layer.src ? `<iframe src="https://www.google.com/maps?q=${encodeURIComponent(layer.src)}&amp;output=embed" title="${escapeHtml(layer.name)}" loading="lazy"></iframe>` : "";
+      } else if (layer.kind === "scene") {
+        inner = `<div class="scene" data-shape="${layer.shape ?? "orb"}" data-color="${color}"></div>`;
+      } else if (layer.kind === "shape") {
+        inner = `<div style="width:100%;height:100%;background:${color}"></div>`;
+      } else if (layer.kind === "marquee") {
+        inner = `<div class="marquee"><span>${escapeHtml(base)}</span></div>`;
+      } else if (layer.kind === "social") {
+        inner = `<div class="social">${(layer.text ?? "").split(",").map((name) => name.trim()).filter(Boolean).map((name) => `<a href="#">${escapeHtml(name)}</a>`).join("")}</div>`;
+      } else if (layer.kind === "form") {
+        const endpoint = /^https:\/\//.test(layer.src ?? "") ? (layer.src as string) : "#";
+        inner = `<form class="form" action="${escapeHtml(endpoint)}" method="post"><input name="name" placeholder="Nome" required><input name="email" type="email" placeholder="E-mail" required><textarea name="message" placeholder="Mensagem" required></textarea><button type="submit">Enviar</button></form>`;
+      } else if (layer.kind === "ads") {
+        const pub = layer.src ?? "";
+        const slot = layer.text ?? "";
+        inner = /^ca-pub-\d{10,20}$/.test(pub) && /^\d{5,20}$/.test(slot)
+          ? `<ins class="adsbygoogle" style="display:block;width:100%;height:100%" data-ad-client="${pub}" data-ad-slot="${slot}" data-ad-format="auto" data-full-width-responsive="true"></ins><script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${pub}" crossorigin="anonymous"></script><script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>`
+          : "";
+      } else if (layer.kind === "language") {
+        const list = layer.languages ?? [];
+        inner = (layer.languageStyle === "buttons")
+          ? `<div class="lang-buttons">${list.map((code) => `<button type="button" data-lang-btn="${code}">${escapeHtml(siteLanguages[code] ?? code)}</button>`).join("")}</div>`
+          : `<select class="lang-select">${list.map((code) => `<option value="${code}">${escapeHtml(siteLanguages[code] ?? code)}</option>`).join("")}</select>`;
+      }
+      if (layer.linkPageId && !["form", "language", "ads"].includes(layer.kind)) {
+        inner += `<a class="lk" href="${hrefTo(page, layer.linkPageId)}" aria-label="${escapeHtml(base)}"></a>`;
+      }
+      return `<div class="l k-${layer.kind}"${motion} style="${style}">${inner}</div>`;
+    }).join("\n");
+
+    const scenes = layers.some((layer) => layer.kind === "scene" && layer.visible !== false)
+      ? `<script type="module">${exportSceneScript}</script>` : "";
+    const css = `*{box-sizing:border-box}[hidden]{display:none!important}html,body{margin:0;background:#0b0c10;color:#eef1eb;font-family:'${font}',system-ui,sans-serif}
+.stage{position:relative;width:min(100%,1440px);aspect-ratio:16/9;margin:0 auto;overflow:hidden}
+.l{position:absolute;display:flex;align-items:center;justify-content:center;min-width:0;--mx:0%;--my:0%;--sy:0px;transform:translate(calc(var(--mx) + 0px),calc(var(--my) + var(--sy))) rotate(var(--r)) scale(var(--s))}
+.l>*{max-width:100%;max-height:100%}
+.tx{display:block;font-size:clamp(14px,2.2vw,32px);font-weight:600;line-height:1.1;text-align:center}
+.k-button .tx{background:${color};color:#11150e;padding:12px 18px;border-radius:999px}
+.k-text .tx{text-align:left;width:100%}
+.img{width:100%;height:100%;background-size:cover;background-position:center}
+.l iframe{width:100%;height:100%;border:0;border-radius:8px}
+.scene{width:100%;height:100%}.scene canvas{width:100%;height:100%;display:block}
+.marquee{overflow:hidden;white-space:nowrap;display:flex;align-items:center;width:100%;height:100%;background:rgba(255,255,255,.06)}
+.marquee span{display:inline-block;animation:mq 14s linear infinite}@keyframes mq{from{transform:translateX(100%)}to{transform:translateX(-100%)}}
+.social{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}.social a{color:#eef1eb;border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:4px 10px;text-decoration:none;font-size:13px}
+.form{display:flex;flex-direction:column;gap:8px;padding:12px;width:100%;height:100%;background:rgba(255,255,255,.04);border-radius:10px}
+.form input,.form textarea{background:#0e0f13;color:#eef1eb;border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:9px;font:inherit;min-width:0}
+.form textarea{flex:1;resize:none}.form button{background:${color};color:#11150e;border:0;border-radius:6px;padding:10px;font-weight:600;cursor:pointer}
+.lang-buttons{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.lang-buttons button{border:1px solid rgba(255,255,255,.3);background:transparent;color:#eef1eb;border-radius:999px;padding:6px 12px;cursor:pointer}.lang-buttons button.active{background:${color};color:#11150e;border-color:${color}}
+.lang-select{background:#0e0f13;color:#eef1eb;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px}
+.lk{position:absolute;inset:0;z-index:2}
+@media (max-width:700px){.stage{aspect-ratio:auto;min-height:100vh;display:flex;flex-direction:column;gap:14px;padding:16px}.l{position:relative!important;left:auto!important;top:auto!important;width:100%!important;height:auto!important;min-height:64px}.l>*{width:100%}}`;
+
+    const html = `<!doctype html>
+<html lang="${source}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(title)}</title>
+<meta name="description" content="${escapeHtml(description)}">
+<meta name="keywords" content="${escapeHtml(page.seoKeywords ?? "")}">
+<link rel="canonical" href="${domain}${page.path}">
+<meta property="og:title" content="${escapeHtml(title)}">
+<meta property="og:description" content="${escapeHtml(description)}">
+<meta property="og:url" content="${domain}${page.path}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=${font.replace(/ /g, "+")}:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+${css}
+</style>
+</head>
+<body>
+<main class="stage">
+${body}
+</main>
+<script>${exportClientScript}</script>
+${scenes}
+</body>
+</html>
+`;
+    files.push({ name: fileOf(page), content: html });
+  }
+
+  const urls = pages.map((page) => `  <url><loc>${domain}${page.path}</loc></url>`).join("\n");
+  files.push({ name: "sitemap.xml", content: `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n` });
+  files.push({ name: "robots.txt", content: `User-agent: *\nAllow: /\n\nSitemap: ${domain}/sitemap.xml\n` });
+  files.push({ name: "seo.json", content: JSON.stringify(pages.map((page) => ({ path: page.path, title: page.seoTitle || page.name, description: page.seoDescription ?? "", keywords: page.seoKeywords ?? "" })), null, 2) });
+  files.push({ name: "LEIA-ME.txt", content: "Site exportado pelo SiteForge.\n\n1. Troque 'seu-dominio.com' pelo seu domínio nos arquivos (canonical, sitemap.xml e robots.txt).\n2. Envie todos os arquivos para qualquer hospedagem estática (GitHub Pages, Netlify, Hostinger etc.).\n3. Formulários: configure um endereço https de envio (por exemplo, Formspree) no painel do elemento.\n4. Anúncios AdSense só funcionam depois que a conta for aprovada para o domínio.\n" });
+  return files;
+}
 
 function shapeGeometry(shape: Shape3D, scale: number) {
   switch (shape) {
@@ -264,7 +402,6 @@ type Integration = {
 };
 
 // Código-fonte completo do projeto (TypeScript, HTML, CSS, servidor e configurações) em .zip.
-const SOURCE_ZIP_URL = "https://github.com/brenno-schnoor/siteforge/archive/refs/heads/main.zip";
 
 // Lista fixa de integrações disponíveis (antes vinha do servidor, que não roda no Pages).
 const availableIntegrations: Integration[] = [
@@ -322,6 +459,7 @@ type Layer = {
   languageStyle?: "select" | "buttons";
   sourceLanguage?: string;
   noTranslate?: boolean;
+  alt?: string;
   translations?: Record<string, string>;
 };
 
@@ -393,6 +531,21 @@ const templates: Template[] = [
     templateLayer("Headline", "text", Type, { x: 8, y: 22, w: 42, h: 18 }, "Nome do produto"),
     templateLayer("Description", "text", Type, { x: 8, y: 42, w: 40, h: 14 }, "Descreva o que ele faz em uma frase."),
     templateLayer("Buy button", "button", Square, { x: 8, y: 62, w: 18, h: 7 }, "Comprar"),
+  ] },
+  { id: "restaurant", name: "Restaurante", build: () => [
+    templateLayer("Hero section", "group", BoxSelect, { x: 0, y: 0, w: 100, h: 100 }),
+    templateLayer("Headline", "text", Type, { x: 8, y: 20, w: 44, h: 22 }, "Sabor da casa"),
+    templateLayer("Description", "text", Type, { x: 8, y: 44, w: 40, h: 12 }, "Pratos feitos na hora, com ingredientes frescos."),
+    templateLayer("Reserve button", "button", Square, { x: 8, y: 62, w: 20, h: 7 }, "Reservar mesa"),
+    templateLayer("Image", "image", ImageIcon, { x: 56, y: 12, w: 38, h: 72 }),
+  ] },
+  { id: "store", name: "Loja", build: () => [
+    templateLayer("Hero section", "group", BoxSelect, { x: 0, y: 0, w: 100, h: 100 }),
+    templateLayer("Headline", "text", Type, { x: 6, y: 8, w: 60, h: 14 }, "Nova coleção"),
+    templateLayer("Product", "image", ImageIcon, { x: 6, y: 30, w: 28, h: 50 }),
+    templateLayer("Product", "image", ImageIcon, { x: 36, y: 30, w: 28, h: 50 }),
+    templateLayer("Product", "image", ImageIcon, { x: 66, y: 30, w: 28, h: 50 }),
+    templateLayer("Shop button", "button", Square, { x: 6, y: 84, w: 20, h: 7 }, "Ver produtos"),
   ] },
 ];
 
@@ -793,6 +946,8 @@ function App() {
 
   const saveProject = async (nextPayload?: ProjectPayload) => {
     const payload = nextPayload ?? { name: projectName, pages, layers: serializableLayers(layers), layersByPage: serializeLayersByPage(layersByPage), selectedColor, font };
+    const payloadSize = JSON.stringify(payload).length;
+    if (payloadSize > 3_000_000) notify(`Projeto grande (${(payloadSize / 1_000_000).toFixed(1)} MB): reduza imagens para o site carregar mais rápido`);
     const draftKey = authUser ? `siteforge-project:${authUser.id}` : "siteforge-project:anonymous";
     localStorage.setItem(draftKey, JSON.stringify(payload));
     if (!authUser) {
@@ -1180,7 +1335,7 @@ function App() {
           <LanguageSelect value={language} onChange={setLanguage} />
           <button className="icon-button subtle" aria-label={editorCopy[language].theme} title={editorCopy[language].theme} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button className="secondary-button" onClick={() => setPreview((value) => !value)}><Play size={14} fill="currentColor" /> {preview ? ui.backToEdit : ui.preview}</button>
-          <button className="publish-button" onClick={async () => { await saveProject(); const url = URL.createObjectURL(buildZip(buildSeoFiles(pages))); const link = document.createElement("a"); link.href = url; link.download = "siteforge-seo.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); notify("Baixando o .zip com SEO do projeto"); }}><Sparkles size={15} /> {saving ? ui.saving : ui.publish}</button>
+          <button className="publish-button" onClick={async () => { await saveProject(); const url = URL.createObjectURL(buildZip(exportSite(pages, (pageId) => layersByPage[pageId] ?? starterLayers, selectedColor, font))); const link = document.createElement("a"); link.href = url; link.download = "siteforge-site.zip"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); notify("Baixando o site exportado em .zip"); }}><Sparkles size={15} /> {saving ? ui.saving : ui.publish}</button>
           <button className={`avatar-button ${authUser ? "signed-in" : ""}`} aria-label={authUser ? "Abrir conta" : "Entrar"} onClick={() => setAuthOpen(true)}>{authUser ? (authUser.name || authUser.email).slice(0, 2).toUpperCase() : <LogIn size={14} />}</button>
         </div>
       </header>
@@ -1298,7 +1453,7 @@ function App() {
                       ) : layer.kind === "social" ? (
                         <div className="edit-social">{(layer.text ?? "").split(",").map((name) => name.trim()).filter(Boolean).map((name) => <span key={name}>{name}</span>)}</div>
                       ) : layer.kind === "form" ? (
-                        <form className={`edit-form${preview ? " is-live" : ""}`} onSubmit={(event) => event.preventDefault()}><input placeholder="Nome" /><input placeholder="E-mail" type="email" /><textarea placeholder="Mensagem" /><button type="button">Enviar</button></form>
+                        <form className={`edit-form${preview ? " is-live" : ""}`} onSubmit={(event) => { event.preventDefault(); if (!preview) return; const endpoint = layer.src ?? ""; if (!/^https:\/\//.test(endpoint)) { notify("Configure um endereço https de envio no painel do formulário"); return; } fetch(endpoint, { method: "POST", body: new FormData(event.currentTarget), headers: { Accept: "application/json" } }).then((response) => notify(response.ok ? "Mensagem enviada" : "Não foi possível enviar a mensagem")).catch(() => notify("Falha de conexão ao enviar")); }}><input name="name" placeholder="Nome" required /><input name="email" placeholder="E-mail" type="email" required /><textarea name="message" placeholder="Mensagem" required /><button type="submit">Enviar</button></form>
                       ) : layer.kind === "ads" ? (
                         <div className="edit-ads"><AdSlot publisher={layer.src ?? ""} slot={layer.text ?? ""} live={preview} /></div>
                       ) : layer.kind === "image" ? (
@@ -1339,6 +1494,8 @@ function App() {
             {chosenLayer?.kind === "scene" && <div className="inspector-section"><div className="inspector-section-title">Forma 3D <ChevronDown size={14} /></div><div className="shape-grid">{(Object.keys(shapeOptions) as Shape3D[]).map((shape) => <button key={shape} className={chosenLayer.shape === shape || (!chosenLayer.shape && shape === "orb") ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { shape })}>{shapeOptions[shape]}</button>)}</div></div>}
             {chosenLayer && (chosenLayer.kind === "video" || chosenLayer.kind === "map") && <div className="inspector-section"><div className="inspector-section-title">Conteúdo <ChevronDown size={14} /></div><label className="property-field"><span>{chosenLayer.kind === "video" ? "Link do vídeo (YouTube ou Vimeo, https)" : "Endereço no mapa"}</span><input value={chosenLayer.src ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { src: event.target.value })} /></label></div>}
             {chosenLayer && (chosenLayer.kind === "marquee" || chosenLayer.kind === "social") && <div className="inspector-section"><div className="inspector-section-title">Conteúdo <ChevronDown size={14} /></div><label className="property-field"><span>{chosenLayer.kind === "marquee" ? "Texto que rola" : "Redes (separadas por vírgula)"}</span><input value={chosenLayer.text ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { text: event.target.value })} /></label></div>}
+            {chosenLayer?.kind === "image" && <div className="inspector-section"><div className="inspector-section-title">Acessibilidade <ChevronDown size={14} /></div><label className="property-field"><span>Texto alternativo</span><input value={chosenLayer.alt ?? ""} placeholder="Descreva a imagem" onChange={(event) => updateLayer(chosenLayer.id, { alt: event.target.value })} /></label>{!chosenLayer.alt && <p className="a11y-warning">Falta texto alternativo: leitores de tela não descrevem esta imagem.</p>}</div>}
+            {chosenLayer?.kind === "form" && <div className="inspector-section"><div className="inspector-section-title">Envio do formulário <ChevronDown size={14} /></div><label className="property-field"><span>Endereço de envio (https)</span><input value={chosenLayer.src ?? ""} placeholder="https://formspree.io/f/..." onChange={(event) => updateLayer(chosenLayer.id, { src: event.target.value.trim() })} /></label>{!/^https:\/\//.test(chosenLayer.src ?? "") && <p className="a11y-warning">Sem endereço de envio, as mensagens não são recebidas.</p>}</div>}
             {chosenLayer?.kind === "ads" && <div className="inspector-section"><div className="inspector-section-title">AdSense <ChevronDown size={14} /></div><label className="property-field"><span>ID do editor (ca-pub-…)</span><input value={chosenLayer.src ?? ""} placeholder="ca-pub-0000000000000000" onChange={(event) => updateLayer(chosenLayer.id, { src: event.target.value.trim() })} /></label><label className="property-field"><span>ID do bloco de anúncio</span><input value={chosenLayer.text ?? ""} placeholder="1234567890" onChange={(event) => updateLayer(chosenLayer.id, { text: event.target.value.trim() })} /></label><p className="translation-hint">Os anúncios aparecem só na pré-visualização, depois que sua conta AdSense for aprovada para o domínio.</p></div>}
             {chosenLayer?.kind === "language" && <div className="inspector-section"><div className="inspector-section-title">Idiomas do site <ChevronDown size={14} /></div><label className="property-field translation-field"><span>Idioma original dos textos</span><select value={chosenLayer.sourceLanguage ?? "pt"} onChange={(event) => updateLayer(chosenLayer.id, { sourceLanguage: event.target.value })}>{Object.keys(siteLanguages).map((code) => <option key={code} value={code}>{siteLanguages[code]}</option>)}</select></label><div className="shape-grid lang-style-grid"><button className={(chosenLayer.languageStyle ?? "select") === "select" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "select" })}>Menu</button><button className={chosenLayer.languageStyle === "buttons" ? "active" : ""} onClick={() => updateLayer(chosenLayer.id, { languageStyle: "buttons" })}>Botões</button></div><div className="shape-grid">{Object.keys(siteLanguages).map((code) => { const active = (chosenLayer.languages ?? []).includes(code); return <button key={code} className={active ? "active" : ""} onClick={() => { const current = chosenLayer.languages ?? []; updateLayer(chosenLayer.id, { languages: active ? current.filter((item) => item !== code) : [...current, code] }); }}>{siteLanguages[code]}</button>; })}</div></div>}
             {chosenLayer && (chosenLayer.kind === "text" || chosenLayer.kind === "button") && <div className="inspector-section"><div className="inspector-section-title">Tradução <ChevronDown size={14} /></div><div className="effect-row"><div><strong>Não traduzir</strong><span>Mantém este elemento no idioma original</span></div><button className={`toggle ${chosenLayer.noTranslate ? "active" : ""}`} onClick={() => updateLayer(chosenLayer.id, { noTranslate: !chosenLayer.noTranslate })}><span /></button></div></div>}
