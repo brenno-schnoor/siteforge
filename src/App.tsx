@@ -1342,7 +1342,7 @@ function App() {
 
   if (authLoading) return <AuthLoadingScreen />;
   if (!authUser) return <LoginRequiredScreen language={language} onLanguageChange={setLanguage} onLogin={beginLogin} />;
-  if (projectsRoute) return <ProjectsScreen user={authUser} pages={pages} language={language} onLanguageChange={setLanguage} onOpenEditor={openEditor} onNewProject={createProject} onLogout={logout} />;
+  if (projectsRoute) return <>{/* Mensagens da tela de projetos */}<ProjectsScreen user={authUser} pages={pages} language={language} onLanguageChange={setLanguage} onOpenEditor={openEditor} onNewProject={createProject} onLogout={logout} />{toast && <div className="toast"><span className="toast-check">✓</span>{toast}</div>}</>;
 
   return (
     <main className={`app-shell ${preview ? "preview-mode" : ""}`}>
