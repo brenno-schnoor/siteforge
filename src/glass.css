@@ -234,3 +234,44 @@
   .mobile-nav svg { width: 22px; height: 22px; }
   .bottom-dock { bottom: calc(96px + env(safe-area-inset-bottom)) !important; }
 }
+
+/* Celular: barras e botões cerca de 1,5 a 2 vezes maiores, e o fundo ocupa a tela inteira */
+@media (max-width: 860px) {
+  :root { --m-top: 84px; --m-nav: 100px; }
+  html, body, #root, .app-shell { height: 100%; min-height: 100dvh; background: #0a0b10 !important; }
+  .app-shell { background-attachment: fixed; }
+
+  .topbar { height: var(--m-top) !important; padding: 0 14px !important; gap: 12px !important; }
+  .topbar .brand-mark { transform: scale(1.3); }
+  .topbar .icon-button, .mobile-more-button { width: 52px !important; height: 52px !important; }
+  .topbar .icon-button svg, .mobile-more-button svg { width: 24px; height: 24px; }
+  .publish-button { height: 56px !important; font-size: 16px !important; padding: 0 18px !important; }
+  .avatar-button { width: 52px !important; height: 52px !important; font-size: 15px; }
+  .project-name-input { font-size: 18px !important; height: 52px; }
+
+  .editor-stage, .left-sidebar, .right-sidebar {
+    top: var(--m-top) !important;
+    bottom: calc(var(--m-nav) + 16px + env(safe-area-inset-bottom)) !important;
+  }
+  .stage-toolbar { min-height: 88px !important; gap: 10px !important; }
+  .tool-button, .zoom-button { height: 60px !important; font-size: 18px !important; padding: 0 18px !important; }
+  .tool-button svg, .zoom-button svg, .device-button svg { width: 22px; height: 22px; }
+  .device-button { height: 60px !important; font-size: 17px !important; padding: 0 16px !important; }
+
+  .mobile-nav {
+    height: var(--m-nav) !important;
+    bottom: calc(12px + env(safe-area-inset-bottom)) !important;
+    border-radius: 30px !important;
+  }
+  .mobile-nav button { min-height: 76px; font-size: 15px; gap: 6px; }
+  .mobile-nav svg { width: 32px !important; height: 32px !important; }
+
+  .bottom-dock {
+    height: 92px !important;
+    bottom: calc(var(--m-nav) + 28px + env(safe-area-inset-bottom)) !important;
+    border-radius: 999px !important;
+  }
+  .bottom-dock button { height: 68px !important; font-size: 18px !important; padding: 0 22px !important; }
+  .bottom-dock .dock-label { font-size: 18px; }
+  .bottom-dock svg { width: 22px; height: 22px; }
+}
