@@ -290,7 +290,7 @@
   color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer;
 }
 .zoom-menu button:hover { background: rgba(255,255,255,.08); }
-.zoom-menu button.active { color: #b8ff3d; font-weight: 700; }
+.zoom-menu button.active { color: var(--lime); font-weight: 700; }
 
 /* Celular: título do projeto editável na barra superior */
 @media (max-width: 860px) {
