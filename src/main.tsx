@@ -4,6 +4,7 @@ import "./styles.css";
 import "./mobile.css";
 import "./glass.css";
 import { appPath } from "./paths";
+import ErrorBoundary from "./ErrorBoundary";
 
 const App = lazy(() => import("./App"));
 const PublicSite = lazy(() => import("./PublicSite"));
@@ -19,7 +20,7 @@ const publicPage = pathname === "/integrations" ? "integrations" : pathname === 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <Suspense fallback={<div className="route-loading"><span className="live-dot" /> Loading SiteForge</div>}>
-      {!knownRoute ? <NotFound /> : editorRoute ? <App /> : <PublicSite page={publicPage} />}
+      <ErrorBoundary>{!knownRoute ? <NotFound /> : editorRoute ? <App /> : <PublicSite page={publicPage} />}</ErrorBoundary>
     </Suspense>
   </StrictMode>
 );
