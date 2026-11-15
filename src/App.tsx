@@ -908,6 +908,7 @@ function App() {
   const psfInputRef = useRef<HTMLInputElement>(null);
   const isDesktopApp = typeof window !== "undefined" && (window as unknown as { siteforgeDesktop?: boolean }).siteforgeDesktop === true;
   // Cor de destaque da interface do editor (salva neste navegador ou aplicativo).
+  const accentInputRef = useRef<HTMLInputElement>(null);
   const [accent, setAccent] = useState<string>(() => {
     try { return localStorage.getItem("siteforge-accent") || "#b8ff3d"; } catch { return "#b8ff3d"; }
   });
@@ -1789,6 +1790,7 @@ function App() {
     { label: mobileLabels.undo, icon: <Undo2 size={18} />, onClick: undo, disabled: undoStack.length === 0 },
     { label: mobileLabels.redo, icon: <Redo2 size={18} />, onClick: redo, disabled: redoStack.length === 0 },
     { label: mobileLabels.preview, icon: <Play size={18} />, onClick: () => setPreview((value) => !value) },
+    { label: ({ pt: "Cor de destaque", en: "Accent color", es: "Color de acento" } as const)[language], icon: <Palette size={18} />, onClick: () => accentInputRef.current?.click() },
     { label: mobileLabels.theme, icon: theme === "dark" ? <Sun size={18} /> : <Moon size={18} />, onClick: () => setTheme((current) => (current === "dark" ? "light" : "dark")) },
     { label: mobileLabels.assets, icon: <Grid2X2 size={18} />, onClick: () => assetInputRef.current?.click() },
     { label: mobileLabels.save, icon: <Download size={18} />, onClick: saveFile },
@@ -1839,6 +1841,7 @@ function App() {
           <label className="accent-picker" title="Cor de destaque do editor"><input type="color" value={accent} onChange={(event) => setAccent(event.target.value)} aria-label="Cor de destaque do editor" /></label>
           <button className="icon-button subtle" title="Salvar arquivo .psf" aria-label="Salvar arquivo .psf" onClick={saveFile}><Download size={15} /></button>
           <button className="icon-button subtle" title="Abrir arquivo .psf" aria-label="Abrir arquivo .psf" onClick={() => psfInputRef.current?.click()}><Upload size={15} /></button>
+          <input ref={accentInputRef} type="color" value={accent} hidden onChange={(event) => setAccent(event.target.value)} />
           <input ref={psfInputRef} type="file" accept=".psf,application/json" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void openFile(file); event.currentTarget.value = ""; }} />
           <button className="icon-button subtle" aria-label={editorCopy[language].theme} title={editorCopy[language].theme} onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}>{theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}</button>
           <button className="secondary-button" onClick={() => setPreview((value) => !value)}><Play size={14} fill="currentColor" /> {preview ? ui.backToEdit : ui.preview}</button>
