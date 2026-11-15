@@ -126,3 +126,17 @@
 @media (prefers-reduced-motion: reduce) {
   .topbar, .left-rail, .mobile-nav { -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* Barra flutuante do editor (ferramentas de adicionar elementos): cápsula de vidro sobre a tela */
+.bottom-dock {
+  bottom: 18px !important;
+  height: 50px !important;
+  padding: 0 12px;
+  border-radius: 999px !important;
+  background: var(--glass-fill-strong) !important;
+  border: 1px solid var(--glass-edge) !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), var(--glass-shine) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  animation: sfRise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
