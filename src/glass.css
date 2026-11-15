@@ -305,3 +305,11 @@
     background: rgba(255,255,255,.06);
   }
 }
+
+/* Desktop: barras e dock acima da prancheta, que fica dentro da própria camada do canvas */
+.canvas-wrap { isolation: isolate; z-index: 0; }
+.artboard-shell { z-index: 0; }
+.stage-toolbar, .bottom-dock, .toast { position: relative; z-index: 20; }
+.bottom-dock { position: fixed; z-index: 20; }
+.toast { position: fixed; z-index: 30; }
+.zoom-menu { z-index: 41; }
