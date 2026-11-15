@@ -1891,6 +1891,24 @@ function App() {
           </div>
           <div ref={canvasWrapRef} className={`canvas-wrap ${showGrid ? "show-grid" : ""}`}>
             <div className="canvas-topline"><span><span className="canvas-dot" /> {activePage?.name} <span className="muted">/ {activePage?.path}</span></span><span className="canvas-size">{DEVICE_SIZE[device].w} × {DEVICE_SIZE[device].h} px</span><span className="canvas-coordinates">x: 0 · y: 0 <span className="muted">·</span> 1440 × 900</span></div>
+            {!preview && <div className="align-bar" role="toolbar" aria-label="Alinhar">
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("left")}>Esquerda</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("hcenter")}>Centro H</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("right")}>Direita</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("top")}>Topo</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("vcenter")}>Meio V</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("bottom")}>Base</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => distributeSelection("x")}>Distribuir H</button>
+              <button type="button" disabled={!selectedLayerId} onClick={() => distributeSelection("y")}>Distribuir V</button>
+              {chosenLayer && (chosenLayer.kind === "button" || chosenLayer.kind === "text") && (
+                <label className="link-picker">Link
+                  <select value={chosenLayer.linkPageId ?? ""} onChange={(event) => updateLayer(chosenLayer.id, { linkPageId: event.target.value || undefined })}>
+                    <option value="">Sem link</option>
+                    {pages.map((page) => <option key={page.id} value={page.id}>{page.name}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>}
             <div className={`artboard-shell device-${device}`} style={{ position: "absolute", left: "50%", top: "50%", width: DEVICE_SIZE[device].w, height: DEVICE_SIZE[device].h, transform: `translate(-50%, -50%) scale(${fitScale * zoom / 100})` }}>
               <div className="artboard-grid" />
               <div className="edit-surface" onPointerDown={() => { if (!preview && editingLayerId === null) { setSelectedLayerId(""); setExtraSelected([]); } }} onPointerMove={(event) => { if (!preview) return; const rect = event.currentTarget.getBoundingClientRect(); setPointer({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 }); }}>
