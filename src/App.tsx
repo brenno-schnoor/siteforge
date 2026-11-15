@@ -973,8 +973,8 @@ function App() {
   // Posição de cada camada no dispositivo atual (desktop usa a caixa principal).
   const flowMap = useMemo(() => (device === "desktop" ? null : flowBoxes(layers, device)), [layers, device]);
   const boxFor = (layer: Layer, index: number): LayerBox => {
-    if (device === "desktop") return boxFor(layer, index);
-    return layer.responsive?.[device] ?? flowMap?.get(layer.id) ?? boxFor(layer, index);
+    if (device === "desktop") return boxOf(layer, index);
+    return layer.responsive?.[device] ?? flowMap?.get(layer.id) ?? boxOf(layer, index);
   };
   // Grava a posição: no desktop altera a caixa principal; em tablet ou celular, só o ajuste daquele aparelho.
   const boxPatch = (layer: Layer, box: LayerBox): Partial<Layer> => {
