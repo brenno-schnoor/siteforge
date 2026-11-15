@@ -2,6 +2,42 @@
 
 Todas as mudanças notáveis do SiteForge estão documentadas aqui.
 
+## v0.0.3
+
+**Editor e celular**
+- Interface redesenhada para celular: barra inferior flutuante, folhas inferiores, navegação por painéis e botões maiores
+- Layout correto ao girar o celular e em tablets
+- Fundo em tela inteira e interface com efeito de vidro fosco
+- Nome do projeto editável também no celular
+- Menu de zoom (50% a 200% e ajustar à tela), válido em todos os dispositivos
+- Prancheta com as dimensões reais (1440×900, 768×1024 e 390×844) e escala que cabe na tela
+- Barra de alinhamento só no editor; na pré-visualização, apenas dispositivo e zoom
+
+**Projetos**
+- Projetos locais ilimitados, guardados no próprio navegador ou aplicativo (IndexedDB)
+- Nuvem limitada a 1 projeto por conta, com salvamento automático
+- Pergunta "salvar antes de sair?" para projetos locais com alterações
+- Escolha entre projeto local e na nuvem ao criar um novo
+
+**Layout por dispositivo**
+- Layout automático para tablet e celular, com ajustes manuais salvos por dispositivo
+
+**Correções**
+- Tela preta ao abrir a visualização em desktop (recursão em `boxFor`)
+- Tela de erro com a mensagem, em vez de tela preta
+- Prancheta na pré-visualização posicionada corretamente
+- Barras e dock sobrepostos à prancheta no desktop
+- Menu de zoom que não respondia ao clique
+
+**Identidade visual**
+- Logo SVG em cada cor de destaque (`assets/logos/`)
+
+**Aplicativo desktop**
+- Instaladores gerados para Windows, macOS e Linux a partir da tag `v0.0.3`
+
+**Ainda não disponível**
+- Versões para Android e iOS
+
 ## v0.0.2
 
 **Aplicativo desktop (Windows, macOS e Linux)**

@@ -21,7 +21,7 @@ O foco atual está em:
 - interface pública em português, inglês e espanhol;
 - tema claro e escuro.
 
-## Versão atual: v0.0.2
+## Versão atual: v0.0.3
 
 **Editor**
 - Camadas por página, arrastar, redimensionar, desfazer/refazer e atalhos de teclado
