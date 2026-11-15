@@ -238,6 +238,16 @@
   .mobile-nav button.active { color: var(--lime); }
   .mobile-nav button.active svg { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--lime) 45%, transparent)); }
 
+  /* Barra de ferramentas do palco: rolagem horizontal em vez de quebrar a tela */
+  .stage-toolbar { height: auto; min-height: 48px; padding: 6px 8px; overflow-x: auto; overflow-y: hidden; gap: 6px; justify-content: flex-start; scrollbar-width: none; }
+  .stage-toolbar::-webkit-scrollbar { display: none; }
+  .stage-toolbar > * { flex-shrink: 0; }
+  .tool-button { white-space: nowrap; }
+  /* Elementos de desktop que não cabem no celular */
+  .canvas-topline, .canvas-bottomline, .align-bar, .canvas-hint, .canvas-info { display: none !important; }
+  .editor-stage { overflow: hidden; }
+  .canvas-stage, .canvas-wrap { padding: 8px; }
+
   .confirm-backdrop, .sheet-backdrop { place-items: end center; padding: 0; }
   .confirm-card { width: 100%; border-radius: 22px 22px 0 0; padding: 26px 20px calc(22px + env(safe-area-inset-bottom)); }
   .more-sheet { width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom)); max-height: 88dvh; overflow: auto; }
