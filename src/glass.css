@@ -63,10 +63,9 @@
 .canvas-wrap {
   background: transparent !important;
 }
+/* A prancheta não usa desfoque: o 3D (WebGL) dentro dela ficaria preto em alguns navegadores. */
 .artboard-shell {
   background: rgba(28, 31, 40, 0.5) !important;
-  -webkit-backdrop-filter: var(--glass-blur);
-  backdrop-filter: var(--glass-blur);
   border: 1px solid var(--glass-edge) !important;
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35), var(--glass-shine);
 }
