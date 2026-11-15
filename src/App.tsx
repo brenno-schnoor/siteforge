@@ -467,6 +467,8 @@ type Layer = {
   detail: string;
   icon: typeof Box;
   box?: LayerBox;
+  // Ajustes feitos manualmente em tablet ou celular. Sem ajuste, o layout é automático.
+  responsive?: Partial<Record<"tablet" | "mobile", LayerBox>>;
   text?: string;
   linkPageId?: string;
   src?: string;
@@ -587,6 +589,36 @@ function nearestSnap(candidates: number[], targets: number[]): { diff: number; t
     }
   }
   return best;
+}
+
+// Layout automático para tablet e celular: empilha os elementos na ordem da tela de desktop,
+// reduz a altura quando passa do tamanho do aparelho e mantém a largura proporcional.
+function flowBoxes(layers: Layer[], device: "tablet" | "mobile"): Map<string, LayerBox> {
+  const target = DEVICE_SIZE[device];
+  const source = DEVICE_SIZE.desktop;
+  const items = layers
+    .map((layer, index) => ({ layer, box: layer.box ?? { x: 10 + (index % 6) * 4, y: 10 + (index % 6) * 4, w: 30, h: 12 } }))
+    .filter(({ layer }) => layer.visible !== false && !layer.responsive?.[device])
+    .sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x);
+  const fullWidth = device === "mobile" ? 90 : 84;
+  const big = (kind: LayerKind) => kind === "scene" || kind === "video" || kind === "map" || kind === "form" || kind === "group" || kind === "image" || kind === "ads";
+  const planned = items.map(({ layer, box }) => {
+    const width = big(layer.kind) ? fullWidth : Math.min(fullWidth, Math.max(28, box.w * (device === "mobile" ? 1.6 : 1.25)));
+    const height = Math.min(60, ((box.h / 100) * source.h) / target.h * 100);
+    return { layer, width, height };
+  });
+  const gap = 2.5;
+  const available = 94;
+  const needed = planned.reduce((sum, item) => sum + item.height, 0) + gap * Math.max(0, planned.length - 1);
+  const shrink = needed > available ? available / needed : 1;
+  const map = new Map<string, LayerBox>();
+  let cursor = 3;
+  for (const item of planned) {
+    const height = item.height * shrink;
+    map.set(item.layer.id, { x: (100 - item.width) / 2, y: cursor, w: item.width, h: height });
+    cursor += height + gap * shrink;
+  }
+  return map;
 }
 
 // Camadas sem posição salva ganham uma caixa padrão, em cascata.
@@ -935,6 +967,17 @@ function App() {
   });
   const ui = uiCopy[language];
   const projectsRoute = routePath === "/projects";
+  // Posição de cada camada no dispositivo atual (desktop usa a caixa principal).
+  const flowMap = useMemo(() => (device === "desktop" ? null : flowBoxes(layers, device)), [layers, device]);
+  const boxFor = (layer: Layer, index: number): LayerBox => {
+    if (device === "desktop") return boxFor(layer, index);
+    return layer.responsive?.[device] ?? flowMap?.get(layer.id) ?? boxFor(layer, index);
+  };
+  // Grava a posição: no desktop altera a caixa principal; em tablet ou celular, só o ajuste daquele aparelho.
+  const boxPatch = (layer: Layer, box: LayerBox): Partial<Layer> => {
+    if (device === "desktop") return { box };
+    return { responsive: { ...(layer.responsive ?? {}), [device]: box } };
+  };
   // Mede a área do palco e calcula a escala que cabe a prancheta inteira nela.
   useEffect(() => {
     const element = canvasWrapRef.current;
@@ -1451,7 +1494,7 @@ function App() {
   // Alinha as camadas selecionadas entre si; com uma só, alinha à área do canvas.
   const alignSelection = (action: "left" | "hcenter" | "right" | "top" | "vcenter" | "bottom") => {
     const ids = [selectedLayerId, ...extraSelected].filter(Boolean);
-    const targets = layers.map((item, index) => ({ item, box: boxOf(item, index) })).filter(({ item }) => ids.includes(item.id) && !item.locked);
+    const targets = layers.map((item, index) => ({ item, box: boxFor(item, index) })).filter(({ item }) => ids.includes(item.id) && !item.locked);
     if (!targets.length) return notify("Selecione uma camada para alinhar");
     const bounds = targets.length > 1
       ? { minX: Math.min(...targets.map(({ box }) => box.x)), maxX: Math.max(...targets.map(({ box }) => box.x + box.w)), minY: Math.min(...targets.map(({ box }) => box.y)), maxY: Math.max(...targets.map(({ box }) => box.y + box.h)) }
@@ -1467,13 +1510,13 @@ function App() {
       if (action === "vcenter") y = (bounds.minY + bounds.maxY) / 2 - box.h / 2;
       placed.set(item.id, { ...box, x, y });
     }
-    setLayers((current) => current.map((item, index) => (placed.has(item.id) ? { ...item, box: placed.get(item.id) } : item)));
+    setLayers((current) => current.map((item, index) => (placed.has(item.id) ? { ...item, ...boxPatch(item, placed.get(item.id) as LayerBox) } : item)));
   };
 
   // Distribui três ou mais camadas com espaços iguais, na horizontal ou na vertical.
   const distributeSelection = (axis: "x" | "y") => {
     const ids = [selectedLayerId, ...extraSelected].filter(Boolean);
-    const targets = layers.map((item, index) => ({ item, box: boxOf(item, index) })).filter(({ item }) => ids.includes(item.id) && !item.locked);
+    const targets = layers.map((item, index) => ({ item, box: boxFor(item, index) })).filter(({ item }) => ids.includes(item.id) && !item.locked);
     if (targets.length < 3) return notify("Selecione pelo menos três camadas para distribuir");
     const sorted = [...targets].sort((a, b) => (axis === "x" ? a.box.x - b.box.x : a.box.y - b.box.y));
     const size = (box: LayerBox) => (axis === "x" ? box.w : box.h);
@@ -1490,8 +1533,8 @@ function App() {
     }
     setLayers((current) => current.map((item, index) => {
       if (!placed.has(item.id)) return item;
-      const box = boxOf(item, index);
-      return { ...item, box: axis === "x" ? { ...box, x: placed.get(item.id) as number } : { ...box, y: placed.get(item.id) as number } };
+      const box = boxFor(item, index);
+      return { ...item, ...boxPatch(item, axis === "x" ? { ...box, x: placed.get(item.id) as number } : { ...box, y: placed.get(item.id) as number }) };
     }));
   };
 
@@ -1510,7 +1553,7 @@ function App() {
 
   const duplicateLayer = () => {
     if (!chosenLayer) return;
-    const box = boxOf(chosenLayer, layers.indexOf(chosenLayer));
+    const box = boxFor(chosenLayer, layers.indexOf(chosenLayer));
     const copy: Layer = {
       ...chosenLayer,
       id: `${chosenLayer.kind}-${Date.now()}`,
@@ -1537,7 +1580,7 @@ function App() {
     if (!surface) return;
     const rect = surface.getBoundingClientRect();
     const start = { x: event.clientX, y: event.clientY };
-    const origin = boxOf(layer, index);
+    const origin = boxFor(layer, index);
     const pageId = activePageId;
     const snapshot = layersByPage;
     let committed = false;
@@ -1565,7 +1608,7 @@ function App() {
       setGuides({ x: snapX ? [snapX.target] : [], y: snapY ? [snapY.target] : [] });
       setLayersByPage((prev) => ({
         ...prev,
-        [pageId]: (prev[pageId] ?? starterLayers).map((item) => (item.id === layer.id ? { ...item, box: next } : item)),
+        [pageId]: (prev[pageId] ?? starterLayers).map((item) => (item.id === layer.id ? { ...item, ...boxPatch(item, next) } : item)),
       }));
     };
     const onUp = () => {
@@ -1823,7 +1866,7 @@ function App() {
               <div className="artboard-grid" />
               <div className="edit-surface" onPointerDown={() => { if (!preview && editingLayerId === null) { setSelectedLayerId(""); setExtraSelected([]); } }} onPointerMove={(event) => { if (!preview) return; const rect = event.currentTarget.getBoundingClientRect(); setPointer({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 }); }}>
                 {layers.map((layer, index) => ({ layer, index })).reverse().map(({ layer, index }) => {
-                  const box = boxOf(layer, index);
+                  const box = boxFor(layer, index);
                   const selected = !preview && (layer.id === selectedLayerId || extraSelected.includes(layer.id));
                   const editing = editingLayerId === layer.id;
                   const follow = preview && !!layer.follow && (layer.trigger ?? "move") === "move";
@@ -1896,7 +1939,7 @@ function App() {
           <div className="inspector-tabs"><button className={activeInspector === "design" ? "active" : ""} onClick={() => setActiveInspector("design")}><Palette size={14} /> Design</button><button className={activeInspector === "animate" ? "active" : ""} onClick={() => setActiveInspector("animate")}><WandSparkles size={14} /> Animate <span className="new-badge">NEW</span></button><button className={activeInspector === "seo" ? "active" : ""} onClick={() => setActiveInspector("seo")}><Search size={14} /> SEO</button></div>
           {activeInspector === "design" ? <div className="inspector-scroll">
             <div className="inspector-section"><div className="inspector-section-title">Layout <ChevronDown size={14} /></div><div className="property-grid">{(["x", "y", "w", "h"] as const).map((key) => (
-                <label key={key} className="property-field"><span>{key.toUpperCase()} %</span><input type="number" min={0} max={100} disabled={!chosenLayer || chosenLayer.locked} value={chosenLayer ? Math.round(boxOf(chosenLayer, layers.indexOf(chosenLayer))[key] * 10) / 10 : 0} onChange={(event) => { if (!chosenLayer) return; const box = boxOf(chosenLayer, layers.indexOf(chosenLayer)); updateLayer(chosenLayer.id, { box: { ...box, [key]: Number(event.target.value) } }); }} /></label>
+                <label key={key} className="property-field"><span>{key.toUpperCase()} %</span><input type="number" min={0} max={100} disabled={!chosenLayer || chosenLayer.locked} value={chosenLayer ? Math.round(boxFor(chosenLayer, layers.indexOf(chosenLayer))[key] * 10) / 10 : 0} onChange={(event) => { if (!chosenLayer) return; const box = boxFor(chosenLayer, layers.indexOf(chosenLayer)); updateLayer(chosenLayer.id, boxPatch(chosenLayer, { ...box, [key]: Number(event.target.value) })); }} /></label>
               ))}</div><div className="property-line"><span>Position</span><div className="segmented-mini"><button className="active">Abs</button><button>Rel</button><button>Fix</button></div></div></div>
             <div className="inspector-section"><div className="inspector-section-title">Transform <ChevronDown size={14} /></div><div className="property-grid">{([
                 { key: "rotate", label: "Rotate °", min: -180, max: 180, fallback: 0 },

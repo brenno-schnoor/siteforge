@@ -2,6 +2,7 @@ import { lazy, StrictMode, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 import "./mobile.css";
+import "./glass.css";
 import { appPath } from "./paths";
 
 const App = lazy(() => import("./App"));
