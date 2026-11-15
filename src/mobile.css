@@ -1,3 +1,8 @@
+/* Prancheta: tamanho real de cada dispositivo, ajustado à área (ver DEVICE_SIZE em App.tsx). */
+.artboard-shell { min-height: 0 !important; max-height: none !important; max-width: none !important; flex: none !important; }
+.canvas-wrap { position: relative; overflow: hidden; }
+.canvas-size { color: #7c818d; font-size: 9px; margin-right: 14px; white-space: nowrap; }
+
 /* v0.0.3 · diálogos próprios, projetos locais e layout para celular.
    Carregado depois de styles.css para vencer as regras anteriores. */
 
@@ -252,20 +257,6 @@
   .artboard-shell { flex: 1; min-height: 0 !important; max-height: none !important; height: auto; }
   .canvas-wrap { flex: 1; min-height: 0; }
   /* Nome do projeto visível na barra superior */
-  /* Tela de edição no celular: a prancheta ocupa a largura e a altura disponíveis,
-     sem a escala de 82% do desktop, que deixava a área desproporcional. */
-  .canvas-wrap { padding: 8px 10px 0; }
-  .artboard-shell {
-    transform: none !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    flex: 1 1 auto;
-    align-self: center;
-  }
-  .artboard-shell.device-tablet { width: auto !important; aspect-ratio: 3 / 4; max-width: 100% !important; }
-  .artboard-shell.device-mobile { width: auto !important; aspect-ratio: 9 / 16; max-width: 100% !important; }
   .project-name-input { color: #eff2ec; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 6px 10px; }
   .project-name-input::placeholder { color: #7c8290; }
   .canvas-stage, .canvas-wrap { padding: 8px; }
