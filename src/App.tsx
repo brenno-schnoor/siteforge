@@ -69,6 +69,13 @@ import { beginGoogleLogin, getCurrentUser, loadCloudProject, saveCloudProject, s
 import { deleteLocalProject, getLocalProject, listLocalProjects, newLocalProjectId, putLocalProject, type LocalProjectRecord } from "./localProjects";
 
 type Device = "desktop" | "tablet" | "mobile";
+
+// Dimensões reais de cada dispositivo, em pixels (a prancheta é ajustada à área disponível, como no Canva).
+const DEVICE_SIZE: Record<Device, { w: number; h: number }> = {
+  desktop: { w: 1440, h: 900 },
+  tablet: { w: 768, h: 1024 },
+  mobile: { w: 390, h: 844 },
+};
 type InspectorTab = "design" | "animate" | "seo";
 type LayerKind = "scene" | "text" | "button" | "image" | "group" | "language" | "video" | "map" | "shape" | "marquee" | "social" | "form" | "ads";
 type Shape3D = "orb" | "cube" | "torus" | "pyramid" | "knot" | "cylinder";
@@ -849,6 +856,8 @@ function App() {
   const MOBILE_QUERY = "(max-width: 860px), (max-height: 520px) and (pointer: coarse)";
   const [device, setDevice] = useState<Device>(() => (typeof window !== "undefined" && window.matchMedia(MOBILE_QUERY).matches ? "mobile" : "desktop"));
   const deviceTouched = useRef(false);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
+  const [fitScale, setFitScale] = useState(0.5);
   useEffect(() => {
     const query = window.matchMedia(MOBILE_QUERY);
     const onChange = (event: MediaQueryListEvent) => {
@@ -926,6 +935,21 @@ function App() {
   });
   const ui = uiCopy[language];
   const projectsRoute = routePath === "/projects";
+  // Mede a área do palco e calcula a escala que cabe a prancheta inteira nela.
+  useEffect(() => {
+    const element = canvasWrapRef.current;
+    if (!element) return;
+    const size = DEVICE_SIZE[device];
+    const measure = () => {
+      const availableW = Math.max(120, element.clientWidth - 40);
+      const availableH = Math.max(120, element.clientHeight - 70);
+      setFitScale(Math.min(availableW / size.w, availableH / size.h));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [device, projectsRoute, preview]);
 
   const activePage = pages.find((page) => page.id === activePageId) ?? pages[0];
   const selectedLayer = layers.find((layer) => layer.id === selectedLayerId) ?? layers[1];
@@ -1775,8 +1799,8 @@ function App() {
             <div className="toolbar-center"><button className={`device-button ${device === "desktop" ? "active" : ""}`} onClick={() => { deviceTouched.current = true; setDevice("desktop"); }}><Maximize2 size={13} /> {editorCopy[language].desktop}</button><button className={`device-button ${device === "tablet" ? "active" : ""}`} onClick={() => { deviceTouched.current = true; setDevice("tablet"); }}><Square size={12} /> {editorCopy[language].tablet}</button><button className={`device-button ${device === "mobile" ? "active" : ""}`} onClick={() => { deviceTouched.current = true; setDevice("mobile"); }}><PanelLeft size={12} /> {editorCopy[language].mobile}</button></div>
             <div className="toolbar-group right"><button className="icon-button" aria-label={editorCopy[language].search} title={editorCopy[language].search} onClick={() => setPaletteOpen(true)}><Search size={15} /></button><button className={`icon-button ${showGrid ? "active" : ""}`} aria-label="Mostrar grade" title="Mostrar grade" onClick={() => setShowGrid((value) => !value)}><Grid2X2 size={15} /></button><button className="zoom-button" onClick={() => setZoom((value) => value >= 100 ? 60 : value + 10)}>{zoom}% <ChevronDown size={13} /></button></div>
           </div>
-          <div className={`canvas-wrap ${showGrid ? "show-grid" : ""}`}>
-            <div className="canvas-topline"><span><span className="canvas-dot" /> {activePage?.name} <span className="muted">/ {activePage?.path}</span></span><span className="canvas-coordinates">x: 0 · y: 0 <span className="muted">·</span> 1440 × 900</span></div>
+          <div ref={canvasWrapRef} className={`canvas-wrap ${showGrid ? "show-grid" : ""}`}>
+            <div className="canvas-topline"><span><span className="canvas-dot" /> {activePage?.name} <span className="muted">/ {activePage?.path}</span></span><span className="canvas-size">{DEVICE_SIZE[device].w} × {DEVICE_SIZE[device].h} px</span><span className="canvas-coordinates">x: 0 · y: 0 <span className="muted">·</span> 1440 × 900</span></div>
             <div className="align-bar" role="toolbar" aria-label="Alinhar">
               <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("left")}>Esquerda</button>
               <button type="button" disabled={!selectedLayerId} onClick={() => alignSelection("hcenter")}>Centro H</button>
@@ -1795,7 +1819,7 @@ function App() {
                 </label>
               )}
             </div>
-            <div className={`artboard-shell device-${device}`} style={{ transform: `scale(${zoom / 100})` }}>
+            <div className={`artboard-shell device-${device}`} style={{ position: "absolute", left: "50%", top: "50%", width: DEVICE_SIZE[device].w, height: DEVICE_SIZE[device].h, transform: `translate(-50%, -50%) scale(${fitScale * (device === "desktop" ? zoom / 100 : 1)})` }}>
               <div className="artboard-grid" />
               <div className="edit-surface" onPointerDown={() => { if (!preview && editingLayerId === null) { setSelectedLayerId(""); setExtraSelected([]); } }} onPointerMove={(event) => { if (!preview) return; const rect = event.currentTarget.getBoundingClientRect(); setPointer({ x: ((event.clientX - rect.left) / rect.width) * 100, y: ((event.clientY - rect.top) / rect.height) * 100 }); }}>
                 {layers.map((layer, index) => ({ layer, index })).reverse().map(({ layer, index }) => {
