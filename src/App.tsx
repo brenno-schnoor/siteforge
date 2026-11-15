@@ -990,14 +990,22 @@ function App() {
     if (!element) return;
     const size = DEVICE_SIZE[device];
     const measure = () => {
-      const availableW = Math.max(120, element.clientWidth - 40);
-      const availableH = Math.max(120, element.clientHeight - 70);
-      setFitScale(Math.min(availableW / size.w, availableH / size.h));
+      const box = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const padX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const padY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      const availableW = Math.max(120, box.width - padX - 16);
+      const availableH = Math.max(120, box.height - padY - 56);
+      setFitScale(Math.min(1, availableW / size.w, availableH / size.h));
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
-    return () => observer.disconnect();
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, [device, projectsRoute, preview]);
 
   const activePage = pages.find((page) => page.id === activePageId) ?? pages[0];
