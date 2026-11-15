@@ -201,7 +201,19 @@
   .workspace > * { grid-area: 1 / 1; min-width: 0; min-height: 0; }
   .workspace > .editor-stage { height: 100%; }
   .canvas-wrap { height: 100%; }
-  .left-rail, .bottom-dock { display: none !important; }
+  .left-rail { display: none !important; }
+  /* Barra flutuante acima da navegação inferior, com rolagem horizontal */
+  .bottom-dock {
+    display: flex !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(74px + env(safe-area-inset-bottom)) !important;
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .bottom-dock::-webkit-scrollbar { display: none; }
   .sidebar, .right-sidebar, .left-sidebar { width: 100% !important; border: 0 !important; }
   .editor-stage { min-width: 0; }
 

@@ -97,6 +97,7 @@ src/
   supabase.ts      Login com Google, sessão e salvamento do projeto na nuvem (1 por conta)
   styles.css       Sistema visual e responsividade (tablet e notebook)
   mobile.css       Layout para celular, barra inferior, menu "Mais" e diálogos de confirmação
+  glass.css        Vidro fosco em toda a interface (barras, painéis, cartões, barra flutuante)
   vite-env.d.ts    Tipos das variáveis de ambiente
 desktop/
   main.js          Aplicativo Electron: janela, servidor local, menu, verificador de atualizações
@@ -114,6 +115,7 @@ public/
   manus-routes.json Manifesto de rotas do Preview
 assets/
   siteforge_icon.svg               Ícone da marca em SVG
+  logos/                           Logos em SVG, uma por cor de destaque (siteforge-icon-<cor>.svg)
   siteforge_home_ref.png           Referência visual da home
   siteforge_ad_1024x576_audio.mp4  Vídeo de anúncio
   pages_imgs/                      Capturas das páginas (root, work, about, integrations)

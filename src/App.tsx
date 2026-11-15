@@ -44,6 +44,8 @@ import {
   PanelLeft,
   Play,
   Plus,
+  Cloud,
+  HardDrive,
   Plug,
   Redo2,
   Rotate3d,
@@ -946,6 +948,7 @@ function App() {
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [leaveRequest, setLeaveRequest] = useState<LeaveRequest | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   // Alterações não salvas: compara o conteúdo atual com a última versão salva.
   const projectPayload = useMemo(
     () => makePayload({ name: projectName, pages, layersByPage, activePageId, selectedColor, font }),
@@ -1459,6 +1462,29 @@ function App() {
   };
 
   // Novo projeto local: sem limite e sem ir para o banco de dados.
+  // Projeto na nuvem: só 1 por conta, para não sobrecarregar o banco de dados.
+  const createCloudProject = async () => {
+    if (!authUser) {
+      setAuthOpen(true);
+      return;
+    }
+    if (cloudMeta) {
+      notify("No momento só é possível 1 projeto na nuvem, para não pesar no banco de dados");
+      return;
+    }
+    const payload = blankPayload();
+    try {
+      await saveCloudProject(payload);
+    } catch {
+      notify("Não foi possível criar o projeto na nuvem agora");
+      return;
+    }
+    applyProject(payload, { id: "cloud", storage: "cloud" });
+    setCloudMeta({ name: "", updatedAt: new Date().toISOString() });
+    openEditor("/editor");
+    notify("Projeto criado na nuvem");
+  };
+
   const createLocalProject = () => {
     startLocalProject();
     openEditor("/editor");
@@ -1717,6 +1743,16 @@ function App() {
           cancelLabel={dialogCopy.cancel}
         />
       )}
+      {newProjectOpen && (
+        <MobileMoreSheet
+          title={language === "pt" ? "Novo projeto" : language === "es" ? "Nuevo proyecto" : "New project"}
+          onClose={() => setNewProjectOpen(false)}
+          items={[
+            { label: language === "pt" ? "Projeto local · sem limite" : language === "es" ? "Proyecto local · sin límite" : "Local project · no limit", icon: <HardDrive size={18} />, onClick: createLocalProject },
+            { label: language === "pt" ? "Projeto na nuvem · 1 por conta" : language === "es" ? "Proyecto en la nube · 1 por cuenta" : "Cloud project · 1 per account", icon: <Cloud size={18} />, onClick: () => void createCloudProject() },
+          ]}
+        />
+      )}
       {deleteTarget && (
         <ConfirmSheet
           tone="danger"
@@ -1765,7 +1801,7 @@ function App() {
         cloudMeta={cloudMeta}
         activeRef={projectRef}
         onOpen={(id, storage) => guardLeave(() => { void openById(id, storage); openEditor("/editor"); })}
-        onNewProject={() => guardLeave(createLocalProject)}
+        onNewProject={() => guardLeave(() => setNewProjectOpen(true))}
         onDelete={(id) => setDeleteTarget(id)}
         onLogin={() => guardLeave(beginLogin)}
         onLogout={() => guardLeave(() => void logout())}
