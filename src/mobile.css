@@ -161,7 +161,7 @@
 @keyframes sfRise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
 
 /* ---------- Layout para celular (até 860px) ---------- */
-@media (max-width: 860px) {
+@media (max-width: 860px), (max-height: 520px) and (pointer: coarse) {
   .topbar {
     height: 56px;
     padding: 0 10px;
@@ -194,6 +194,8 @@
     min-height: 0;
   }
   .workspace > * { grid-area: 1 / 1; min-width: 0; min-height: 0; }
+  .workspace > .editor-stage { height: 100%; }
+  .canvas-wrap { height: 100%; }
   .left-rail, .bottom-dock { display: none !important; }
   .sidebar, .right-sidebar, .left-sidebar { width: 100% !important; border: 0 !important; }
   .editor-stage { min-width: 0; }
