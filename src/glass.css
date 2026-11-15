@@ -312,3 +312,13 @@
 .bottom-dock { position: fixed; z-index: 20; }
 .toast { position: fixed; z-index: 30; }
 .zoom-menu { z-index: 41; }
+
+/* Pré-visualização: esconde os botões de edição da barra superior e mantém dispositivo e zoom totalmente visíveis e clicáveis */
+.preview-mode .top-actions .icon-button:not(.mobile-more-button),
+.preview-mode .top-actions .top-divider,
+.preview-mode .top-actions .accent-picker { display: none !important; }
+.preview-mode .stage-toolbar { display: flex; opacity: 1 !important; pointer-events: auto !important; }
+.preview-mode .stage-toolbar .toolbar-center,
+.preview-mode .stage-toolbar .zoom-menu-wrap,
+.preview-mode .stage-toolbar .zoom-button,
+.preview-mode .stage-toolbar .device-button { opacity: 1 !important; pointer-events: auto !important; }
