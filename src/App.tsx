@@ -902,9 +902,11 @@ function App() {
   const snapshot = useMemo(() => JSON.stringify(projectPayload), [projectPayload]);
   const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(blankPayload()));
   const dirty = snapshot !== savedSnapshot;
-  const dirtyRef = useRef(dirty);
+  // Só projetos locais pedem confirmação. Projetos da nuvem são sincronizados sozinhos.
+  const needsPrompt = dirty && projectRef.storage === "local";
+  const dirtyRef = useRef(needsPrompt);
   const baselineNext = useRef(false);
-  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  useEffect(() => { dirtyRef.current = needsPrompt; }, [needsPrompt]);
   // Depois de abrir ou criar um projeto, a versão carregada passa a ser a "salva".
   useEffect(() => {
     if (!baselineNext.current) return;
@@ -1009,7 +1011,7 @@ function App() {
     if (authState) window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
-  const saveProject = async (nextPayload?: ProjectPayload): Promise<boolean> => {
+  const saveProject = async (nextPayload?: ProjectPayload, options?: { silent?: boolean }): Promise<boolean> => {
     const payload = nextPayload ?? projectPayload;
     const payloadSize = JSON.stringify(payload).length;
     if (payloadSize > 3_000_000) notify(`Projeto grande (${(payloadSize / 1_000_000).toFixed(1)} MB): reduza imagens para o site carregar mais rápido`);
@@ -1023,7 +1025,7 @@ function App() {
         await saveCloudProject(payload);
         setCloudMeta({ name: payload.name ?? "", updatedAt: new Date().toISOString() });
         setSavedSnapshot(JSON.stringify(payload));
-        notify("Projeto sincronizado com sua conta");
+        if (!options?.silent) notify("Projeto sincronizado com sua conta");
         return true;
       } catch {
         notify("Não foi possível sincronizar agora · o projeto continua aberto");
@@ -1142,7 +1144,7 @@ function App() {
 
   // Antes de sair ou trocar de projeto, pergunta se as alterações devem ser salvas.
   const guardLeave = (run: () => void) => {
-    if (!dirty) {
+    if (!needsPrompt) {
       run();
       return;
     }
@@ -1240,8 +1242,15 @@ function App() {
     void boot();
   }, []);
 
+  // Projeto da nuvem: salva sozinho depois de 2 segundos sem edições.
+  useEffect(() => {
+    if (projectRef.storage !== "cloud" || !authUser || !dirty || saving) return;
+    const timer = window.setTimeout(() => { void saveProject(undefined, { silent: true }); }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [dirty, snapshot, projectRef.storage, authUser, saving]);
+
   // Aplicativo desktop: avisa o processo principal se há alterações e pergunta antes de fechar.
-  useEffect(() => { desktopBridge()?.setDirty?.(dirty); }, [dirty]);
+  useEffect(() => { desktopBridge()?.setDirty?.(needsPrompt); }, [needsPrompt]);
   useEffect(() => {
     desktopBridge()?.onCloseRequest?.(() => setLeaveRequest({ kind: "close" }));
   }, []);
