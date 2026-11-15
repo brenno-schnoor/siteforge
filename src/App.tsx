@@ -845,7 +845,18 @@ function App() {
   const [activeInspector, setActiveInspector] = useState<InspectorTab>("design");
   const [activeSide, setActiveSide] = useState<"pages" | "layers">("pages");
   // Em telas pequenas o editor abre já na pré-visualização de celular.
-  const [device, setDevice] = useState<Device>(() => (typeof window !== "undefined" && window.innerWidth <= 860 ? "mobile" : "desktop"));
+  // Celular em pé ou deitado: a prévia de celular é escolhida sozinha, até o usuário trocar manualmente.
+  const MOBILE_QUERY = "(max-width: 860px), (max-height: 520px) and (pointer: coarse)";
+  const [device, setDevice] = useState<Device>(() => (typeof window !== "undefined" && window.matchMedia(MOBILE_QUERY).matches ? "mobile" : "desktop"));
+  const deviceTouched = useRef(false);
+  useEffect(() => {
+    const query = window.matchMedia(MOBILE_QUERY);
+    const onChange = (event: MediaQueryListEvent) => {
+      if (!deviceTouched.current) setDevice(event.matches ? "mobile" : "desktop");
+    };
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
+  }, []);
   const [routePath, setRoutePath] = useState(() => appPath() || "/editor");
   const [preview, setPreview] = useState(() => appPath() === "/preview");
   const [selectedColor, setSelectedColor] = useState("#b8ff3d");
@@ -1761,7 +1772,7 @@ function App() {
         <section className="editor-stage">
           <div className="stage-toolbar">
             <div className="toolbar-group"><button className="tool-button active" title="Limpar seleção" onClick={() => { setSelectedLayerId(""); setExtraSelected([]); }}><MousePointer2 size={15} /> {editorCopy[language].select}</button><button className="tool-button" title="Inserir frame" onClick={() => addLayer("group", "Frame", BoxSelect, "Frame · auto")}><BoxSelect size={15} /> {editorCopy[language].frame}</button><button className="tool-button" title="Inserir texto" onClick={() => addLayer("text", "Texto", Type, "Texto · 32 px")}><Type size={15} /> {editorCopy[language].type}</button><button className="tool-button" title="Inserir imagem" onClick={() => assetInputRef.current?.click()}><ImageIcon size={15} /> {editorCopy[language].media}</button><button className="tool-button" title="Inserir objeto 3D" onClick={() => addLayer("scene", "Objeto 3D", Move3d, "Esfera · 3D", { shape: "orb" })}><Move3d size={15} /> {editorCopy[language].threeD}</button><button className="tool-button" title="Inserir seletor de idioma" onClick={() => addLayer("language", "Seletor de idioma", Languages, "Idiomas · 2", { languages: ["pt", "en"], box: { x: 74, y: 4, w: 20, h: 6 } })}><Languages size={15} /> Idioma</button><div className="element-menu-wrap"><button className="tool-button" title="Inserir elemento" onClick={() => setElementsOpen((open) => !open)}><Plus size={15} /> Elementos</button>{elementsOpen && <div className="quick-menu element-menu">{elementItems.map((item) => <button key={item.kind} onClick={() => { addLayer(item.kind, item.name, item.icon, item.detail, item.extra); setElementsOpen(false); }}><item.icon size={13} /> {item.name}</button>)}</div>}</div></div>
-            <div className="toolbar-center"><button className={`device-button ${device === "desktop" ? "active" : ""}`} onClick={() => setDevice("desktop")}><Maximize2 size={13} /> {editorCopy[language].desktop}</button><button className={`device-button ${device === "tablet" ? "active" : ""}`} onClick={() => setDevice("tablet")}><Square size={12} /> {editorCopy[language].tablet}</button><button className={`device-button ${device === "mobile" ? "active" : ""}`} onClick={() => setDevice("mobile")}><PanelLeft size={12} /> {editorCopy[language].mobile}</button></div>
+            <div className="toolbar-center"><button className={`device-button ${device === "desktop" ? "active" : ""}`} onClick={() => { deviceTouched.current = true; setDevice("desktop"); }}><Maximize2 size={13} /> {editorCopy[language].desktop}</button><button className={`device-button ${device === "tablet" ? "active" : ""}`} onClick={() => { deviceTouched.current = true; setDevice("tablet"); }}><Square size={12} /> {editorCopy[language].tablet}</button><button className={`device-button ${device === "mobile" ? "active" : ""}`} onClick={() => { deviceTouched.current = true; setDevice("mobile"); }}><PanelLeft size={12} /> {editorCopy[language].mobile}</button></div>
             <div className="toolbar-group right"><button className="icon-button" aria-label={editorCopy[language].search} title={editorCopy[language].search} onClick={() => setPaletteOpen(true)}><Search size={15} /></button><button className={`icon-button ${showGrid ? "active" : ""}`} aria-label="Mostrar grade" title="Mostrar grade" onClick={() => setShowGrid((value) => !value)}><Grid2X2 size={15} /></button><button className="zoom-button" onClick={() => setZoom((value) => value >= 100 ? 60 : value + 10)}>{zoom}% <ChevronDown size={13} /></button></div>
           </div>
           <div className={`canvas-wrap ${showGrid ? "show-grid" : ""}`}>
