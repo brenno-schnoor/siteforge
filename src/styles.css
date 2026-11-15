@@ -25,8 +25,8 @@ button { border: 0; cursor: pointer; color: inherit; }
 .topbar { height: 64px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 22px; background: rgba(10,11,16,.92); position: relative; z-index: 10; }
 .brand-lockup, .project-meta, .top-actions, .toolbar-group, .toolbar-center, .canvas-info, .canvas-bottomline, .stage-toolbar, .property-line, .color-row, .effect-row, .inspector-footer { display: flex; align-items: center; }
 .brand-lockup { gap: 10px; min-width: 210px; }
-.brand-mark { height: 30px; width: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; position: relative; background: linear-gradient(135deg, var(--lime), #87c835); color: #0b0d0d; font: 700 14px 'Space Grotesk'; letter-spacing: -5px; padding-right: 5px; box-shadow: 0 0 24px rgba(184,255,61,.16); }
-.brand-mark span:last-child { color: #28410f; }
+.brand-mark { height: 30px; width: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; position: relative; background: linear-gradient(135deg, var(--lime), color-mix(in srgb, var(--lime) 40%, #2d6cff)); color: #0b0d0d; font: 700 14px 'Space Grotesk'; letter-spacing: -5px; padding-right: 5px; box-shadow: 0 0 24px rgba(184,255,61,.16); }
+.brand-mark span:last-child { color: color-mix(in srgb, var(--lime) 35%, #0b0d0d); }
 .brand-name { font: 600 15px 'Space Grotesk'; letter-spacing: -0.04em; line-height: 15px; }
 .brand-name span { color: var(--lime); }
 .brand-tag { color: var(--muted-2); text-transform: uppercase; letter-spacing: .13em; font-size: 8px; margin-top: 3px; }
