@@ -1,0 +1,276 @@
+/* v0.0.3 · diálogos próprios, projetos locais e layout para celular.
+   Carregado depois de styles.css para vencer as regras anteriores. */
+
+/* ---------- Diálogo "salvar antes de sair?" e confirmações ---------- */
+.confirm-backdrop, .sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 5, 8, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: sfFade 0.2s ease both;
+}
+.confirm-card {
+  position: relative;
+  width: min(440px, 100%);
+  padding: 28px;
+  border-radius: 22px;
+  color: #f0f3e9;
+  background: linear-gradient(160deg, rgba(30, 33, 44, 0.98), rgba(14, 16, 22, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: sfRise 0.32s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.confirm-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, var(--lime), transparent 45%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.55;
+  pointer-events: none;
+}
+.confirm-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  color: var(--lime);
+  background: color-mix(in srgb, var(--lime) 16%, transparent);
+}
+.confirm-card.danger .confirm-icon { color: #ff8a7a; background: rgba(255, 106, 90, 0.14); }
+.confirm-card h2 { margin: 18px 0 8px; font-size: 22px; letter-spacing: -0.02em; line-height: 1.2; }
+.confirm-card p { margin: 0 0 22px; color: #9aa29a; font-size: 13px; line-height: 1.55; }
+.confirm-actions { display: grid; gap: 8px; }
+.confirm-actions button {
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #e7ebe2;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.confirm-actions button.primary {
+  border-color: transparent;
+  background: var(--lime);
+  color: #0b0c10;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--lime) 30%, transparent);
+}
+.confirm-actions button.danger { border-color: transparent; background: #ff6a5a; color: #140606; }
+.confirm-actions button.ghost { border-color: transparent; background: transparent; color: #8b9289; }
+
+/* ---------- Indicador de alterações não salvas ---------- */
+.unsaved-badge {
+  color: #ffca71;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ---------- Projetos (lista local e nuvem) ---------- */
+.project-tile.active { outline: 1px solid var(--lime); outline-offset: -1px; }
+.project-tile { position: relative; }
+.project-delete {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #9aa29a;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.project-delete:hover { color: #ff8a7a; border-color: rgba(255, 106, 90, 0.4); }
+.projects-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 26px 0 0;
+  color: #8b9289;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.projects-signin-text { margin-left: 2px; }
+.live-dot.off { background: #6d7370; box-shadow: none; }
+.guest-button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #b9c0b4;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---------- Menu "Mais" (celular) ---------- */
+.more-sheet {
+  width: min(520px, 100%);
+  padding: 10px 18px 22px;
+  border-radius: 22px;
+  color: #f0f3e9;
+  background: rgba(16, 18, 24, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.5);
+  animation: sfRise 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.sheet-grab { width: 42px; height: 4px; margin: 0 auto 14px; border-radius: 4px; background: rgba(255, 255, 255, 0.18); }
+.sheet-title { margin-bottom: 14px; font-size: 15px; font-weight: 600; }
+.sheet-extra { margin-bottom: 14px; }
+.sheet-settings { display: flex; align-items: center; gap: 10px; }
+.sheet-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sheet-grid button {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 74px;
+  padding: 10px 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4dace;
+  font: inherit;
+  font-size: 11px;
+  text-align: center;
+  cursor: pointer;
+}
+.sheet-grid button:disabled { opacity: 0.35; cursor: default; }
+.sheet-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: var(--lime); background: color-mix(in srgb, var(--lime) 12%, transparent); }
+
+/* Barra inferior do editor: só aparece em celulares e tablets pequenos. */
+.mobile-nav { display: none; }
+.mobile-more-button { display: none; }
+
+@keyframes sfFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sfRise { from { opacity: 0; transform: translateY(14px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+/* ---------- Layout para celular (até 860px) ---------- */
+@media (max-width: 860px) {
+  .topbar {
+    height: 56px;
+    padding: 0 10px;
+    gap: 8px;
+  }
+  .topbar .brand-lockup { gap: 8px; }
+  .topbar .brand-tag, .topbar .brand-name { display: none; }
+  .topbar .brand-mark { transform: scale(0.85); }
+  .project-meta {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    gap: 6px;
+  }
+  .project-meta .meta-divider, .project-meta .status-pulse, .project-meta .muted { display: none; }
+  .project-name-input { min-width: 0; width: 100%; font-size: 13px; }
+  .top-actions { gap: 6px; flex-shrink: 0; }
+  .top-actions > *:not(.publish-button):not(.avatar-button):not(.mobile-more-button) { display: none !important; }
+  .mobile-more-button { display: inline-grid; }
+  .publish-button { padding: 0 12px; font-size: 12px; }
+  .publish-button svg { display: none; }
+  .avatar-button { width: 32px; height: 32px; }
+
+  .app-shell { min-height: 0; height: 100dvh; }
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    height: calc(100dvh - 56px - 66px - env(safe-area-inset-bottom));
+    min-height: 0;
+  }
+  .workspace > * { grid-area: 1 / 1; min-width: 0; min-height: 0; }
+  .left-rail, .bottom-dock { display: none !important; }
+  .sidebar, .right-sidebar, .left-sidebar { width: 100% !important; border: 0 !important; }
+  .editor-stage { min-width: 0; }
+
+  /* Um painel por vez, escolhido pela barra inferior */
+  .workspace[data-mobile-panel="canvas"] > .left-sidebar,
+  .workspace[data-mobile-panel="canvas"] > .right-sidebar,
+  .workspace[data-mobile-panel="pages"] > .editor-stage,
+  .workspace[data-mobile-panel="pages"] > .right-sidebar,
+  .workspace[data-mobile-panel="layers"] > .editor-stage,
+  .workspace[data-mobile-panel="layers"] > .right-sidebar,
+  .workspace[data-mobile-panel="inspector"] > .editor-stage,
+  .workspace[data-mobile-panel="inspector"] > .left-sidebar { display: none !important; }
+
+  .mobile-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    height: calc(66px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    border-top: 1px solid var(--line);
+    background: rgba(10, 11, 16, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .mobile-nav button {
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 4px;
+    color: #6f7570;
+    font: inherit;
+    font-size: 10px;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .mobile-nav button.active { color: var(--lime); }
+  .mobile-nav button.active svg { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--lime) 45%, transparent)); }
+
+  .confirm-backdrop, .sheet-backdrop { place-items: end center; padding: 0; }
+  .confirm-card { width: 100%; border-radius: 22px 22px 0 0; padding: 26px 20px calc(22px + env(safe-area-inset-bottom)); }
+  .more-sheet { width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(22px + env(safe-area-inset-bottom)); max-height: 88dvh; overflow: auto; }
+  .sheet-grid { grid-template-columns: repeat(4, 1fr); }
+
+  /* Modais existentes viram folhas de baixo para cima */
+  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal-card {
+    width: 100% !important;
+    max-width: none !important;
+    max-height: 88dvh;
+    overflow: auto;
+    border-radius: 22px 22px 0 0 !important;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom)) !important;
+  }
+
+  /* Tela de projetos */
+  .projects-topbar { height: 60px; padding: 0 14px; }
+  .projects-topbar .brand-tag { display: none; }
+  .projects-content { padding: 30px 14px 110px; }
+  .projects-heading h1 { font-size: 34px; }
+  .projects-heading .publish-button { width: 100%; justify-content: center; }
+  .projects-grid { grid-template-columns: 1fr !important; gap: 12px; }
+  .projects-toolbar { margin-top: 26px; }
+  .projects-account span:first-child { display: none; }
+  .projects-signin-text { display: none; }
+}
+
+@media (max-width: 380px) {
+  .sheet-grid { grid-template-columns: repeat(3, 1fr); }
+  .project-name-input { font-size: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confirm-backdrop, .sheet-backdrop, .confirm-card, .more-sheet { animation: none; }
+}
