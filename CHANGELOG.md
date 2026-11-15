@@ -33,7 +33,7 @@ Todas as mudanças notáveis do SiteForge estão documentadas aqui.
 - Logo SVG em cada cor de destaque (`assets/logos/`)
 
 **Aplicativo desktop**
-- Instaladores gerados para Windows, macOS e Linux a partir da tag `v0.0.3`
+- Instaladores gerados para Windows, macOS e Linux
 
 **Ainda não disponível**
 - Versões para Android e iOS
