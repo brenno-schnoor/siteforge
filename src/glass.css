@@ -150,3 +150,53 @@
 .error-actions { display: flex; gap: 8px; margin-top: 14px; }
 .error-actions button { min-height: 40px; padding: 0 16px; border-radius: 10px; border: 0; background: var(--lime); color: #0b0c10; font: inherit; font-weight: 600; cursor: pointer; }
 .error-actions button.ghost { background: transparent; color: #b9c0b4; border: 1px solid rgba(255, 255, 255, 0.14); }
+
+/* Barra flutuante (adicionar elementos): cápsula centralizada sobre a tela, com botões maiores */
+.bottom-dock {
+  position: fixed !important;
+  left: calc(var(--rail-w, 56px) + var(--sidebar-w, 220px) + 24px) !important;
+  right: calc(var(--inspector-w, 270px) + 24px) !important;
+  bottom: 18px !important;
+  height: 54px !important;
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px !important;
+  z-index: 25 !important;
+  border-radius: 999px !important;
+  background: var(--glass-fill-strong) !important;
+  border: 1px solid var(--glass-edge) !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), var(--glass-shine) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bottom-dock::-webkit-scrollbar { display: none; }
+.bottom-dock button {
+  height: 36px;
+  min-width: 0;
+  flex-shrink: 0;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  gap: 6px;
+}
+.bottom-dock .dock-label { flex-shrink: 0; font-size: 12px; }
+
+/* Botões da barra de ferramentas e de dispositivo: alvos maiores */
+.tool-button, .zoom-button { height: 36px; font-size: 12px; padding: 0 12px; }
+.device-button { height: 32px; font-size: 11px; padding: 0 10px; }
+
+@media (max-width: 860px) {
+  .bottom-dock {
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(76px + env(safe-area-inset-bottom)) !important;
+    justify-content: flex-start;
+  }
+  .bottom-dock button { height: 40px; padding: 0 14px; font-size: 13px; }
+  .tool-button, .zoom-button { height: 40px; font-size: 13px; padding: 0 12px; }
+  .device-button { height: 36px; font-size: 12px; padding: 0 12px; }
+  .stage-toolbar { min-height: 56px; }
+}
