@@ -140,3 +140,13 @@
   backdrop-filter: var(--glass-blur);
   animation: sfRise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
+
+/* Tela de erro: aparece no lugar da tela preta, com a mensagem para correção */
+.error-screen { min-height: 100dvh; display: grid; place-items: center; padding: 20px; background: #0a0b10; color: #f0f3e9; }
+.error-card { width: min(560px, 100%); padding: 26px; border-radius: 18px; background: rgba(28, 31, 40, 0.7); border: 1px solid rgba(255, 255, 255, 0.12); }
+.error-card h1 { margin: 10px 0 8px; font-size: 22px; }
+.error-card p { color: #9aa29a; font-size: 13px; line-height: 1.5; }
+.error-message { white-space: pre-wrap; word-break: break-word; font-size: 12px; padding: 12px; border-radius: 10px; background: rgba(0, 0, 0, 0.4); color: #ffb4a8; max-height: 220px; overflow: auto; }
+.error-actions { display: flex; gap: 8px; margin-top: 14px; }
+.error-actions button { min-height: 40px; padding: 0 16px; border-radius: 10px; border: 0; background: var(--lime); color: #0b0c10; font: inherit; font-weight: 600; cursor: pointer; }
+.error-actions button.ghost { background: transparent; color: #b9c0b4; border: 1px solid rgba(255, 255, 255, 0.14); }
