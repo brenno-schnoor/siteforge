@@ -87,21 +87,23 @@ Para o login e a persistência, configure no ambiente de build as variáveis `VI
 
 ```text
 src/
-  App.tsx          Editor protegido: páginas, camadas, elementos, SEO, idiomas,
-                   cor de destaque, arquivos .psf e publicação
+  App.tsx          Editor: páginas, camadas, elementos, SEO, idiomas, cor de destaque,
+                   projetos locais e nuvem, diálogo "salvar antes de sair?", menu do celular
   PublicSite.tsx   Site público, páginas institucionais e animações (rastro, revelação, parallax)
+  localProjects.ts Projetos locais no dispositivo (IndexedDB, sem limite e fora do banco)
   NotFound.tsx     Página 404
-  main.tsx         Roteamento por pathname
+  main.tsx         Roteamento por pathname e carregamento dos estilos
   paths.ts         Caminhos com o prefixo do GitHub Pages
-  supabase.ts      Login com Google, sessão e salvamento de projetos
-  styles.css       Sistema visual e responsividade
+  supabase.ts      Login com Google, sessão e salvamento do projeto na nuvem (1 por conta)
+  styles.css       Sistema visual e responsividade (tablet e notebook)
+  mobile.css       Layout para celular, barra inferior, menu "Mais" e diálogos de confirmação
   vite-env.d.ts    Tipos das variáveis de ambiente
 desktop/
-  main.js          Aplicativo Electron: janela, servidor local, menu e verificador de atualizações
-  README.md        Como rodar, gerar e publicar os instaladores
-  preload.js       Ponte segura entre o editor e o aplicativo
+  main.js          Aplicativo Electron: janela, servidor local, menu, verificador de atualizações
+                   e confirmação antes de fechar com alterações não salvas
+  preload.js       Ponte segura entre o editor e o aplicativo (inclui o aviso de fechamento)
   package.json     Configuração do electron-builder (Windows, macOS e Linux)
-  README.md        Como rodar e gerar os instaladores
+  README.md        Como rodar, gerar e publicar os instaladores
 server/
   index.mjs        Servidor Express de apoio ao desenvolvimento
   db.mjs           Schema auxiliar (não usado pelo site publicado)
@@ -117,7 +119,7 @@ assets/
   pages_imgs/                      Capturas das páginas (root, work, about, integrations)
 .github/workflows/
   deploy.yml         Build e publicação no GitHub Pages
-  desktop-build.yml  Instaladores do aplicativo; ao criar a tag desktop-v* publica na release
+  desktop-build.yml  Instaladores do aplicativo; ao criar uma tag v* ou desktop-v*, anexa à release
 ```
 
 ## Baixar o aplicativo desktop

@@ -66,6 +66,7 @@ import {
 } from "lucide-react";
 import { appPath, url } from "./paths";
 import { beginGoogleLogin, getCurrentUser, loadCloudProject, saveCloudProject, signOutCloud } from "./supabase";
+import { deleteLocalProject, getLocalProject, listLocalProjects, newLocalProjectId, putLocalProject, type LocalProjectRecord } from "./localProjects";
 
 type Device = "desktop" | "tablet" | "mobile";
 type InspectorTab = "design" | "animate" | "seo";
@@ -770,6 +771,31 @@ function SceneCanvas({ color, active, preview, onSelect, shape }: { color: strin
   );
 }
 
+type LeaveRequest = { kind: "leave"; run: () => void } | { kind: "close" };
+type MobilePanel = "canvas" | "pages" | "layers" | "inspector";
+type ProjectRef = { id: string; storage: "local" | "cloud" };
+type DesktopBridge = { setDirty?: (dirty: boolean) => void; onCloseRequest?: (callback: () => void) => () => void; confirmClose?: () => void };
+
+// Ponte do aplicativo desktop (exposta pelo preload). Na web não existe.
+const desktopBridge = (): DesktopBridge | undefined =>
+  typeof window !== "undefined" ? (window as unknown as { siteforgeApp?: DesktopBridge }).siteforgeApp : undefined;
+
+// Monta o conteúdo salvo de um projeto a partir do estado do editor.
+function makePayload(input: { name: string; pages: Page[]; layersByPage: Record<string, Layer[]>; activePageId: string; selectedColor: string; font: string }): ProjectPayload {
+  const active = input.layersByPage[input.activePageId] ?? starterLayers;
+  return {
+    name: input.name,
+    pages: input.pages,
+    layers: serializableLayers(active),
+    layersByPage: serializeLayersByPage(input.layersByPage),
+    selectedColor: input.selectedColor,
+    font: input.font,
+  };
+}
+
+const blankPayload = () =>
+  makePayload({ name: "", pages: starterPages, layersByPage: {}, activePageId: "home", selectedColor: "#b8ff3d", font: "Space Grotesk" });
+
 function App() {
   const [pages, setPages] = useState<Page[]>(starterPages);
   const [activePageId, setActivePageId] = useState("home");
@@ -823,7 +849,6 @@ function App() {
   const [preview, setPreview] = useState(() => appPath() === "/preview");
   const [selectedColor, setSelectedColor] = useState("#b8ff3d");
   const [projectName, setProjectName] = useState("");
-  const [hasSavedProject, setHasSavedProject] = useState(false);
   const psfInputRef = useRef<HTMLInputElement>(null);
   const isDesktopApp = typeof window !== "undefined" && (window as unknown as { siteforgeDesktop?: boolean }).siteforgeDesktop === true;
   // Cor de destaque da interface do editor (salva neste navegador ou aplicativo).
@@ -857,6 +882,34 @@ function App() {
   });
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [saving, setSaving] = useState(false);
+  // Projeto aberto: local (no dispositivo, sem limite) ou o único projeto da nuvem.
+  const [projectRef, setProjectRef] = useState<ProjectRef>({ id: "", storage: "local" });
+  const [localProjects, setLocalProjects] = useState<LocalProjectRecord[]>([]);
+  const [cloudMeta, setCloudMeta] = useState<{ name: string; updatedAt: string } | null>(null);
+  const [guestMode, setGuestMode] = useState<boolean>(() => {
+    try { return localStorage.getItem("siteforge-guest") === "1"; } catch { return false; }
+  });
+  const [mobilePanel, setMobilePanel] = useState<MobilePanel>("canvas");
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [leaveRequest, setLeaveRequest] = useState<LeaveRequest | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  // Alterações não salvas: compara o conteúdo atual com a última versão salva.
+  const projectPayload = useMemo(
+    () => makePayload({ name: projectName, pages, layersByPage, activePageId, selectedColor, font }),
+    [projectName, pages, layersByPage, activePageId, selectedColor, font],
+  );
+  const snapshot = useMemo(() => JSON.stringify(projectPayload), [projectPayload]);
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(blankPayload()));
+  const dirty = snapshot !== savedSnapshot;
+  const dirtyRef = useRef(dirty);
+  const baselineNext = useRef(false);
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  // Depois de abrir ou criar um projeto, a versão carregada passa a ser a "salva".
+  useEffect(() => {
+    if (!baselineNext.current) return;
+    baselineNext.current = false;
+    setSavedSnapshot(snapshot);
+  });
   const ui = uiCopy[language];
   const projectsRoute = routePath === "/projects";
 
@@ -942,28 +995,6 @@ function App() {
     localStorage.setItem("siteforge-mcp-servers", JSON.stringify(mcpServers));
   }, [mcpServers]);
 
-  useEffect(() => {
-    const loadAccount = async () => {
-      try {
-        const user = await getCurrentUser();
-        if (user) {
-          setAuthUser(user);
-          const project = (await loadCloudProject()) as Partial<ProjectPayload> | null;
-          if (project?.pages?.length) { setPages(project.pages); setHasSavedProject(true); }
-          if (project?.layers?.length) setLayers(hydrateLayers(project.layers as Layer[]));
-          if (project?.layersByPage) setLayersByPage(hydrateLayersByPage(project.layersByPage as Record<string, Layer[]>));
-          if (project?.selectedColor) setSelectedColor(project.selectedColor);
-          if (project?.font) setFont(project.font);
-          if (typeof project?.name === "string") setProjectName(project.name);
-        }
-      } catch {
-        // A sessão indisponível mantém o workspace bloqueado até o login real.
-      } finally {
-        setAuthLoading(false);
-      }
-    };
-    loadAccount();
-  }, []);
 
   const notify = (message: string) => {
     setToast(message);
@@ -977,48 +1008,253 @@ function App() {
     if (authState) window.history.replaceState({}, "", window.location.pathname);
   }, []);
 
-  const saveProject = async (nextPayload?: ProjectPayload) => {
-    const payload = nextPayload ?? { name: projectName, pages, layers: serializableLayers(layers), layersByPage: serializeLayersByPage(layersByPage), selectedColor, font };
+  const saveProject = async (nextPayload?: ProjectPayload): Promise<boolean> => {
+    const payload = nextPayload ?? projectPayload;
     const payloadSize = JSON.stringify(payload).length;
     if (payloadSize > 3_000_000) notify(`Projeto grande (${(payloadSize / 1_000_000).toFixed(1)} MB): reduza imagens para o site carregar mais rápido`);
-    const draftKey = authUser ? `siteforge-project:${authUser.id}` : "siteforge-project:anonymous";
-    localStorage.setItem(draftKey, JSON.stringify(payload));
+    if (projectRef.storage === "cloud") {
+      if (!authUser) {
+        notify("Entre com sua conta para salvar na nuvem");
+        return false;
+      }
+      setSaving(true);
+      try {
+        await saveCloudProject(payload);
+        setCloudMeta({ name: payload.name ?? "", updatedAt: new Date().toISOString() });
+        setSavedSnapshot(JSON.stringify(payload));
+        notify("Projeto sincronizado com sua conta");
+        return true;
+      } catch {
+        notify("Não foi possível sincronizar agora · o projeto continua aberto");
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    }
+    // Projeto local: fica no dispositivo, fora do banco de dados.
+    const id = projectRef.id || newLocalProjectId();
+    const record: LocalProjectRecord = { id, name: payload.name ?? "", updatedAt: new Date().toISOString(), payload };
+    const ok = await putLocalProject(record);
+    if (!ok) {
+      notify("Não foi possível salvar neste dispositivo");
+      return false;
+    }
+    if (!projectRef.id) setProjectRef({ id, storage: "local" });
+    setLocalProjects((current) => [record, ...current.filter((item) => item.id !== id)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    setSavedSnapshot(JSON.stringify(payload));
+    notify("Projeto salvo neste dispositivo");
+    return true;
+  };
+
+  // Edições de campos (nome, SEO) só sincronizam com a nuvem. Projetos locais são salvos ao confirmar.
+  const commitEdit = () => {
+    if (projectRef.storage === "cloud") void saveProject();
+  };
+
+  // Envia uma cópia do projeto atual para a nuvem. Só 1 projeto na nuvem por conta.
+  const syncToCloud = async () => {
     if (!authUser) {
-      notify("Rascunho salvo localmente · entre para sincronizar");
+      setAuthOpen(true);
+      return;
+    }
+    if (projectRef.storage === "cloud") {
+      await saveProject();
+      return;
+    }
+    if (cloudMeta) {
+      notify("No momento só é possível 1 projeto na nuvem, para não pesar no banco de dados");
       return;
     }
     setSaving(true);
     try {
-      await saveCloudProject(payload);
-      setHasSavedProject(true);
-      notify("Projeto sincronizado com sua conta");
+      await saveCloudProject(projectPayload);
+      setCloudMeta({ name: projectName, updatedAt: new Date().toISOString() });
+      notify("Cópia enviada para a nuvem · o projeto continua neste dispositivo");
     } catch {
-      notify("Salvo localmente · sincronização indisponível");
+      notify("Não foi possível enviar para a nuvem agora");
     } finally {
       setSaving(false);
     }
   };
 
-  useEffect(() => {
-    if (authLoading) return;
-    const draftKey = authUser ? `siteforge-project:${authUser.id}` : "siteforge-project:anonymous";
-    const saved = localStorage.getItem(draftKey);
-    if (!saved) return;
+  // Carrega um conteúdo de projeto no editor e marca como "salvo" depois que a tela atualizar.
+  const applyProject = (project: Partial<ProjectPayload>, ref: ProjectRef) => {
+    const nextPages = project.pages?.length ? project.pages : starterPages;
+    const firstId = nextPages[0].id;
+    baselineNext.current = true;
+    setUndoStack([]);
+    setRedoStack([]);
+    setPages(nextPages);
+    setActivePageId(firstId);
+    setLayersByPage(
+      project.layersByPage
+        ? hydrateLayersByPage(project.layersByPage as Record<string, Layer[]>)
+        : project.layers?.length
+          ? { [firstId]: hydrateLayers(project.layers as Layer[]) }
+          : {},
+    );
+    setSelectedColor(project.selectedColor || "#b8ff3d");
+    setFont(project.font || "Space Grotesk");
+    setProjectName(typeof project.name === "string" ? project.name : "");
+    setSelectedLayerId("orb");
+    setExtraSelected([]);
+    setProjectRef(ref);
+  };
+
+  const openLocal = (record: LocalProjectRecord) => {
+    applyProject(record.payload as Partial<ProjectPayload>, { id: record.id, storage: "local" });
+  };
+
+  const openCloud = async () => {
     try {
-      const value: unknown = JSON.parse(saved);
-      if (!isProjectDraft(value)) throw new Error("invalid_local_draft");
-      if (value.pages.length) setPages(value.pages);
-      if (value.layers.length) setLayers(hydrateLayers(value.layers));
-      const savedByPage = (value as unknown as { layersByPage?: Record<string, Layer[]> }).layersByPage;
-      if (savedByPage) setLayersByPage(hydrateLayersByPage(savedByPage));
-      if (value.selectedColor) setSelectedColor(value.selectedColor);
-      if (value.font) setFont(value.font);
-      const savedName = (value as { name?: unknown }).name;
-      if (typeof savedName === "string") setProjectName(savedName);
+      const project = (await loadCloudProject()) as Partial<ProjectPayload> | null;
+      if (!project?.pages?.length) {
+        notify("Ainda não há projeto na nuvem");
+        return;
+      }
+      applyProject(project, { id: "cloud", storage: "cloud" });
+      setCloudMeta((meta) => ({ name: project.name ?? "", updatedAt: meta?.updatedAt ?? new Date().toISOString() }));
     } catch {
-      localStorage.removeItem(draftKey);
+      notify("Não foi possível abrir o projeto da nuvem");
     }
-  }, [authLoading, authUser]);
+  };
+
+  const openById = async (id: string, storage: "local" | "cloud") => {
+    if (storage === "cloud") return openCloud();
+    const record = await getLocalProject(id);
+    if (!record) {
+      notify("Projeto não encontrado neste dispositivo");
+      return;
+    }
+    openLocal(record);
+  };
+
+  // Projeto vazio para começar sem abrir a tela de projetos (usado na inicialização).
+  const startLocalProject = () => {
+    const id = newLocalProjectId();
+    const payload = blankPayload();
+    applyProject(payload, { id, storage: "local" });
+    const record: LocalProjectRecord = { id, name: "", updatedAt: new Date().toISOString(), payload };
+    setLocalProjects((current) => [record, ...current]);
+    void putLocalProject(record);
+  };
+
+  // Antes de sair ou trocar de projeto, pergunta se as alterações devem ser salvas.
+  const guardLeave = (run: () => void) => {
+    if (!dirty) {
+      run();
+      return;
+    }
+    setLeaveRequest({ kind: "leave", run });
+  };
+
+  const answerLeave = async (choice: "save" | "discard" | "cancel") => {
+    const request = leaveRequest;
+    if (!request) return;
+    if (choice === "cancel") {
+      setLeaveRequest(null);
+      return;
+    }
+    if (choice === "save") {
+      const ok = await saveProject();
+      if (!ok) return;
+    }
+    setLeaveRequest(null);
+    if (request.kind === "leave") request.run();
+    else desktopBridge()?.confirmClose?.();
+  };
+
+  const confirmDelete = async () => {
+    const id = deleteTarget;
+    setDeleteTarget(null);
+    if (!id) return;
+    await deleteLocalProject(id);
+    setLocalProjects((current) => current.filter((item) => item.id !== id));
+    if (projectRef.id === id) {
+      createLocalProject();
+      return;
+    }
+    notify("Projeto excluído deste dispositivo");
+  };
+
+  const enterGuestMode = () => {
+    try { localStorage.setItem("siteforge-guest", "1"); } catch { /* armazenamento indisponível */ }
+    setGuestMode(true);
+    void (async () => {
+      const locals = await listLocalProjects();
+      setLocalProjects(locals);
+      if (locals[0]) openLocal(locals[0]);
+      else startLocalProject();
+    })();
+  };
+
+  // Inicialização: projeto da nuvem (com login), senão o último projeto local ou um novo.
+  useEffect(() => {
+    const boot = async () => {
+      let locals = await listLocalProjects();
+      setLocalProjects(locals);
+      let user: { id: string } | null = null;
+      try {
+        user = await getCurrentUser();
+        if (user) {
+          setAuthUser(user as AuthUser);
+          const project = (await loadCloudProject()) as Partial<ProjectPayload> | null;
+          if (project?.pages?.length) {
+            applyProject(project, { id: "cloud", storage: "cloud" });
+            setCloudMeta({ name: project.name ?? "", updatedAt: new Date().toISOString() });
+            return;
+          }
+        }
+      } catch {
+        // Sessão indisponível: segue só com os projetos locais.
+      } finally {
+        setAuthLoading(false);
+      }
+      let guest = false;
+      try { guest = localStorage.getItem("siteforge-guest") === "1"; } catch { guest = false; }
+      if (!user && !guest) return;
+      // Migra o rascunho antigo (uma única chave por conta) para projeto local.
+      const legacyKey = `siteforge-project:${user ? user.id : "anonymous"}`;
+      try {
+        const raw = localStorage.getItem(legacyKey);
+        if (raw) {
+          const value: unknown = JSON.parse(raw);
+          if (isProjectDraft(value)) {
+            const rawName = (value as { name?: unknown }).name;
+            const name = typeof rawName === "string" ? rawName : "";
+            const record: LocalProjectRecord = { id: newLocalProjectId(), name, updatedAt: new Date().toISOString(), payload: value };
+            if (await putLocalProject(record)) {
+              locals = [record, ...locals];
+              setLocalProjects(locals);
+              localStorage.removeItem(legacyKey);
+            }
+          }
+        }
+      } catch {
+        localStorage.removeItem(legacyKey);
+      }
+      if (locals[0]) openLocal(locals[0]);
+      else startLocalProject();
+    };
+    void boot();
+  }, []);
+
+  // Aplicativo desktop: avisa o processo principal se há alterações e pergunta antes de fechar.
+  useEffect(() => { desktopBridge()?.setDirty?.(dirty); }, [dirty]);
+  useEffect(() => {
+    desktopBridge()?.onCloseRequest?.(() => setLeaveRequest({ kind: "close" }));
+  }, []);
+  // Web: ao fechar a aba com alterações, o navegador mostra o aviso padrão (o texto não pode ser personalizado).
+  useEffect(() => {
+    if (isDesktopApp) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!dirtyRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [isDesktopApp]);
 
   const applyTemplate = (template: Template) => {
     setLayers(() => template.build());
@@ -1123,35 +1359,21 @@ function App() {
       if (doc?.format !== PSF_FORMAT || typeof doc.version !== "number" || doc.version > PSF_VERSION) throw new Error("psf_invalid");
       const project = doc.project as Partial<ProjectPayload>;
       if (!Array.isArray(project.pages) || !Array.isArray(project.layers)) throw new Error("psf_invalid");
-      setPages(project.pages);
-      setLayers(hydrateLayers(project.layers as Layer[]));
-      if (project.layersByPage) setLayersByPage(hydrateLayersByPage(project.layersByPage as Record<string, Layer[]>));
-      if (project.selectedColor) setSelectedColor(project.selectedColor);
-      if (project.font) setFont(project.font);
-      setProjectName(typeof project.name === "string" ? project.name : file.name.replace(/\.psf$/i, ""));
+      const name = typeof project.name === "string" ? project.name : file.name.replace(/\.psf$/i, "");
+      const id = newLocalProjectId();
+      applyProject({ ...project, name }, { id, storage: "local" });
+      const record: LocalProjectRecord = { id, name, updatedAt: new Date().toISOString(), payload: { ...project, name } };
+      if (await putLocalProject(record)) setLocalProjects((current) => [record, ...current]);
       notify("Projeto aberto do arquivo .psf");
     } catch {
       notify("Arquivo .psf inválido");
     }
   };
 
-  const createProject = () => {
-    // Por enquanto só é permitido 1 projeto por conta, para não sobrecarregar o banco de dados.
-    if (hasSavedProject && !isDesktopApp) {
-      notify("No momento só é possível criar 1 projeto, para não pesar no banco de dados");
-      return;
-    }
-    const nextPayload: ProjectPayload = { pages: starterPages, layers: serializableLayers(starterLayers), selectedColor: "#b8ff3d", font: "Space Grotesk" };
-    setPages(starterPages);
-    setLayersByPage({});
-    setUndoStack([]);
-    setRedoStack([]);
-    setSelectedLayerId("orb");
-    setSelectedColor("#b8ff3d");
-    setFont("Space Grotesk");
-    setActivePageId("home");
+  // Novo projeto local: sem limite e sem ir para o banco de dados.
+  const createLocalProject = () => {
+    startLocalProject();
     openEditor("/editor");
-    void saveProject(nextPayload);
     notify(ui.newProject);
   };
 
@@ -1385,9 +1607,85 @@ function App() {
     notify("Servidor MCP adicionado ao workspace");
   };
 
+  const dialogCopy = {
+    pt: { leaveEyebrow: "Alterações pendentes", leaveTitle: "Salvar antes de sair?", leaveDesc: "As alterações deste projeto ainda não foram salvas neste dispositivo.", leaveSave: "Salvar e continuar", leaveDiscard: "Não salvar", closeTitle: "Salvar antes de fechar?", closeSave: "Salvar e fechar", closeDiscard: "Fechar sem salvar", cancel: "Cancelar", delEyebrow: "Excluir projeto", delTitle: "Excluir este projeto?", delDesc: "Ele será removido deste dispositivo e não pode ser recuperado. Um projeto da nuvem não é afetado.", delConfirm: "Excluir" },
+    en: { leaveEyebrow: "Unsaved changes", leaveTitle: "Save before leaving?", leaveDesc: "This project has changes that are not saved on this device yet.", leaveSave: "Save and continue", leaveDiscard: "Don't save", closeTitle: "Save before closing?", closeSave: "Save and close", closeDiscard: "Close without saving", cancel: "Cancel", delEyebrow: "Delete project", delTitle: "Delete this project?", delDesc: "It will be removed from this device and cannot be recovered. A cloud project is not affected.", delConfirm: "Delete" },
+    es: { leaveEyebrow: "Cambios pendientes", leaveTitle: "¿Guardar antes de salir?", leaveDesc: "Este proyecto tiene cambios que aún no se guardaron en este dispositivo.", leaveSave: "Guardar y continuar", leaveDiscard: "No guardar", closeTitle: "¿Guardar antes de cerrar?", closeSave: "Guardar y cerrar", closeDiscard: "Cerrar sin guardar", cancel: "Cancelar", delEyebrow: "Eliminar proyecto", delTitle: "¿Eliminar este proyecto?", delDesc: "Se quitará de este dispositivo y no se podrá recuperar. Un proyecto en la nube no se ve afectado.", delConfirm: "Eliminar" },
+  }[language];
+  const dialogs = (
+    <>
+      {leaveRequest && (
+        <ConfirmSheet
+          tone="brand"
+          icon={<Save size={20} />}
+          eyebrow={dialogCopy.leaveEyebrow}
+          title={leaveRequest.kind === "close" ? dialogCopy.closeTitle : dialogCopy.leaveTitle}
+          description={`"${projectName || projectsCopy[language].untitled}". ${dialogCopy.leaveDesc}`}
+          actions={[
+            { label: leaveRequest.kind === "close" ? dialogCopy.closeSave : dialogCopy.leaveSave, variant: "primary", onClick: () => void answerLeave("save") },
+            { label: leaveRequest.kind === "close" ? dialogCopy.closeDiscard : dialogCopy.leaveDiscard, variant: "secondary", onClick: () => void answerLeave("discard") },
+          ]}
+          onCancel={() => void answerLeave("cancel")}
+          cancelLabel={dialogCopy.cancel}
+        />
+      )}
+      {deleteTarget && (
+        <ConfirmSheet
+          tone="danger"
+          icon={<Trash2 size={20} />}
+          eyebrow={dialogCopy.delEyebrow}
+          title={dialogCopy.delTitle}
+          description={dialogCopy.delDesc}
+          actions={[{ label: dialogCopy.delConfirm, variant: "danger", onClick: () => void confirmDelete() }]}
+          onCancel={() => setDeleteTarget(null)}
+          cancelLabel={dialogCopy.cancel}
+        />
+      )}
+    </>
+  );
+
+  const mobileLabels = ({
+    pt: { pages: "Páginas", layers: "Camadas", canvas: "Tela", inspector: "Ajustes", more: "Mais", projects: "Projetos", undo: "Desfazer", redo: "Refazer", preview: "Pré-visualizar", theme: "Tema", sync: "Sincronizar na nuvem", account: "Conta", assets: "Imagem", save: "Salvar .psf", open: "Abrir .psf", more_title: "Mais opções", templates: "Templates", integrations: "Integrações", mcp: "Servidores MCP" },
+    en: { pages: "Pages", layers: "Layers", canvas: "Canvas", inspector: "Inspector", more: "More", projects: "Projects", undo: "Undo", redo: "Redo", preview: "Preview", theme: "Theme", sync: "Sync to cloud", account: "Account", assets: "Image", save: "Save .psf", open: "Open .psf", more_title: "More options", templates: "Templates", integrations: "Integrations", mcp: "MCP servers" },
+    es: { pages: "Páginas", layers: "Capas", canvas: "Lienzo", inspector: "Ajustes", more: "Más", projects: "Proyectos", undo: "Deshacer", redo: "Rehacer", preview: "Vista previa", theme: "Tema", sync: "Sincronizar en la nube", account: "Cuenta", assets: "Imagen", save: "Guardar .psf", open: "Abrir .psf", more_title: "Más opciones", templates: "Plantillas", integrations: "Integraciones", mcp: "Servidores MCP" },
+  } as const)[language];
+  const moreItems = [
+    { label: mobileLabels.projects, icon: <FolderOpen size={18} />, onClick: () => guardLeave(openProjects) },
+    { label: mobileLabels.undo, icon: <Undo2 size={18} />, onClick: undo, disabled: undoStack.length === 0 },
+    { label: mobileLabels.redo, icon: <Redo2 size={18} />, onClick: redo, disabled: redoStack.length === 0 },
+    { label: mobileLabels.preview, icon: <Play size={18} />, onClick: () => setPreview((value) => !value) },
+    { label: mobileLabels.theme, icon: theme === "dark" ? <Sun size={18} /> : <Moon size={18} />, onClick: () => setTheme((current) => (current === "dark" ? "light" : "dark")) },
+    { label: mobileLabels.assets, icon: <Grid2X2 size={18} />, onClick: () => assetInputRef.current?.click() },
+    { label: mobileLabels.save, icon: <Download size={18} />, onClick: saveFile },
+    { label: mobileLabels.open, icon: <Upload size={18} />, onClick: () => psfInputRef.current?.click() },
+    { label: mobileLabels.templates, icon: <WandSparkles size={18} />, onClick: () => setTemplatesOpen(true) },
+    { label: mobileLabels.integrations, icon: <Settings2 size={18} />, onClick: () => void openIntegrations() },
+    { label: mobileLabels.mcp, icon: <Plug size={18} />, onClick: openMcp },
+    { label: mobileLabels.sync, icon: <Save size={18} />, onClick: () => void syncToCloud() },
+    { label: mobileLabels.account, icon: <UserRound size={18} />, onClick: () => setAuthOpen(true) },
+  ];
+
   if (authLoading) return <AuthLoadingScreen />;
-  if (!authUser) return <LoginRequiredScreen language={language} onLanguageChange={setLanguage} onLogin={beginLogin} />;
-  if (projectsRoute) return <>{/* Mensagens da tela de projetos */}<ProjectsScreen user={authUser} pages={pages} language={language} onLanguageChange={setLanguage} onOpenEditor={openEditor} onNewProject={createProject} onLogout={logout} />{toast && <div className="toast"><span className="toast-check">✓</span>{toast}</div>}</>;
+  if (!authUser && !guestMode) return <LoginRequiredScreen language={language} onLanguageChange={setLanguage} onLogin={beginLogin} onGuest={enterGuestMode} />;
+  if (projectsRoute) return (
+    <>
+      <ProjectsScreen
+        user={authUser}
+        language={language}
+        onLanguageChange={setLanguage}
+        localProjects={localProjects}
+        cloudMeta={cloudMeta}
+        activeRef={projectRef}
+        onOpen={(id, storage) => guardLeave(() => { void openById(id, storage); openEditor("/editor"); })}
+        onNewProject={() => guardLeave(createLocalProject)}
+        onDelete={(id) => setDeleteTarget(id)}
+        onLogin={() => guardLeave(beginLogin)}
+        onLogout={() => guardLeave(() => void logout())}
+      />
+      {dialogs}
+      {toast && <div className="toast"><span className="toast-check">✓</span>{toast}</div>}
+    </>
+  );
 
   return (
     <main className={`app-shell ${preview ? "preview-mode" : ""}`}>
@@ -1396,8 +1694,9 @@ function App() {
           <div className="brand-mark"><span>S</span><span>F</span></div>
           <div><div className="brand-name">siteforge<span>.</span></div><div className="brand-tag">visual web editor</div></div>
         </div>
-        <div className="project-meta"><span className="status-pulse" /> <input className="project-name-input" aria-label="Nome do projeto" value={projectName} placeholder={editorCopy[language].untitled} maxLength={80} onChange={(event) => setProjectName(event.target.value)} onBlur={() => { void saveProject(); }} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /><span className="meta-divider" /> <span className="muted">{editorCopy[language].saved}</span></div>
+        <div className="project-meta"><span className="status-pulse" /> <input className="project-name-input" aria-label="Nome do projeto" value={projectName} placeholder={editorCopy[language].untitled} maxLength={80} onChange={(event) => setProjectName(event.target.value)} onBlur={commitEdit} onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }} /><span className="meta-divider" /> {dirty ? <span className="unsaved-badge">● {({ pt: "Não salvo", en: "Unsaved", es: "Sin guardar" } as const)[language]}</span> : <span className="muted">{editorCopy[language].saved}</span>}</div>
         <div className="top-actions">
+          <button className="icon-button subtle mobile-more-button" aria-label={({ pt: "Mais opções", en: "More options", es: "Más opciones" } as const)[language]} onClick={() => setMobileMoreOpen(true)}><Menu size={16} /></button>
           <button className="icon-button subtle" aria-label={editorCopy[language].undo} title={editorCopy[language].undo} onClick={undo} disabled={undoStack.length === 0}><Undo2 size={15} /></button>
           <button className="icon-button subtle" aria-label={editorCopy[language].redo} title={editorCopy[language].redo} onClick={redo} disabled={redoStack.length === 0}><Redo2 size={15} /></button>
           <span className="top-divider" />
@@ -1413,11 +1712,11 @@ function App() {
         </div>
       </header>
 
-      <div className="workspace">
+      <div className="workspace" data-mobile-panel={mobilePanel}>
         <aside className="left-rail">
           <div className="rail-top">
             <button className="rail-icon active" aria-label="Editor"><MousePointer2 size={17} /></button>
-            <button className="rail-icon" aria-label={ui.projects} onClick={openProjects}><FolderOpen size={17} /></button>
+            <button className="rail-icon" aria-label={ui.projects} onClick={() => guardLeave(openProjects)}><FolderOpen size={17} /></button>
             <button className="rail-icon" aria-label="Assets" onClick={() => assetInputRef.current?.click()}><Grid2X2 size={17} /></button>
             <input ref={assetInputRef} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) uploadAsset(file); event.target.value = ""; }} />
             <button className="rail-icon" aria-label="MCP" onClick={openMcp}><Plug size={17} /></button>
@@ -1428,7 +1727,7 @@ function App() {
 
         <aside className="sidebar left-sidebar">
           <div className="panel-heading"><div><span className="eyebrow">Project</span><h2>{editorCopy[language].structure}</h2></div><button className="icon-button" onClick={() => setShowMenu((value) => !value)}><Menu size={16} /></button></div>
-          {showMenu && <div className="quick-menu"><button onClick={() => { void saveProject(); }}><Save size={14} /> Save project</button><button onClick={addPage}><Plus size={14} /> Add page</button><button onClick={openIntegrations}><Plug size={14} /> Integrations</button><button onClick={openMcp}><Plug size={14} /> MCP servers</button><button onClick={() => { setTemplatesOpen(true); setShowMenu(false); }}><WandSparkles size={14} /> Browse templates</button></div>}
+          {showMenu && <div className="quick-menu"><button onClick={() => { void saveProject(); }}><Save size={14} /> Save project</button><button onClick={() => { void syncToCloud(); }}><Save size={14} /> Sincronizar na nuvem</button><button onClick={addPage}><Plus size={14} /> Add page</button><button onClick={openIntegrations}><Plug size={14} /> Integrations</button><button onClick={openMcp}><Plug size={14} /> MCP servers</button><button onClick={() => { setTemplatesOpen(true); setShowMenu(false); }}><WandSparkles size={14} /> Browse templates</button></div>}
           <div className="segmented-tabs"><button className={activeSide === "pages" ? "active" : ""} onClick={() => setActiveSide("pages")}><FileText size={13} /> {ui.pages} <span>{pages.length}</span></button><button className={activeSide === "layers" ? "active" : ""} onClick={() => setActiveSide("layers")}><Layers3 size={13} /> {ui.layers}</button></div>
           {activeSide === "pages" ? (
             <div className="sidebar-scroll page-list">
@@ -1578,9 +1877,9 @@ function App() {
             <div className="inspector-section"><div className="inspector-section-title">Effects <ChevronDown size={14} /></div><div className="effect-row"><div className="effect-icon"><Sparkles size={14} /></div><div><strong>Soft glow</strong><span>Screen · 22%</span></div><button className={`toggle ${chosenLayer?.glow ? "active" : ""}`} onClick={() => { if (chosenLayer) updateLayer(chosenLayer.id, { glow: !chosenLayer.glow }); }}><span /></button></div><div className="effect-row"><div className="effect-icon dark"><Box size={14} /></div><div><strong>Noise texture</strong><span>Overlay · 12%</span></div><button className={`toggle ${layers.find((item) => item.id === "noise")?.visible !== false ? "active" : ""}`} onClick={() => { const noise = layers.find((item) => item.id === "noise"); if (noise) updateLayer(noise.id, { visible: !noise.visible }); }}><span /></button></div></div>
           </div> : activeInspector === "seo" && activePage ? <div className="inspector-scroll">
             <div className="inspector-section"><div className="inspector-section-title">SEO da página <ChevronDown size={14} /></div>
-              <label className="property-field stacked"><span>Título ({(activePage.seoTitle ?? "").length}/60)</span><input value={activePage.seoTitle ?? ""} maxLength={60} placeholder={activePage.name} onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoTitle: event.target.value } : item))} onBlur={() => { void saveProject(); }} /></label>
-              <label className="property-field stacked"><span>Descrição ({(activePage.seoDescription ?? "").length}/160)</span><textarea className="seo-textarea" value={activePage.seoDescription ?? ""} maxLength={160} placeholder="Resuma o conteúdo desta página em até 160 caracteres." onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoDescription: event.target.value } : item))} onBlur={() => { void saveProject(); }} /></label>
-              <label className="property-field stacked"><span>Palavras-chave</span><input value={activePage.seoKeywords ?? ""} placeholder="design, portfólio, estúdio" onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoKeywords: event.target.value } : item))} onBlur={() => { void saveProject(); }} /></label>
+              <label className="property-field stacked"><span>Título ({(activePage.seoTitle ?? "").length}/60)</span><input value={activePage.seoTitle ?? ""} maxLength={60} placeholder={activePage.name} onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoTitle: event.target.value } : item))} onBlur={commitEdit} /></label>
+              <label className="property-field stacked"><span>Descrição ({(activePage.seoDescription ?? "").length}/160)</span><textarea className="seo-textarea" value={activePage.seoDescription ?? ""} maxLength={160} placeholder="Resuma o conteúdo desta página em até 160 caracteres." onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoDescription: event.target.value } : item))} onBlur={commitEdit} /></label>
+              <label className="property-field stacked"><span>Palavras-chave</span><input value={activePage.seoKeywords ?? ""} placeholder="design, portfólio, estúdio" onChange={(event) => setPages((current) => current.map((item) => item.id === activePage.id ? { ...item, seoKeywords: event.target.value } : item))} onBlur={commitEdit} /></label>
               <div className="seo-preview"><span className="seo-url">{activePage.path}</span><strong>{activePage.seoTitle || activePage.name}</strong><p>{activePage.seoDescription || "Sem descrição. Buscadores vão mostrar um trecho do texto da página."}</p></div>
               <p className="translation-hint">Esses dados são salvos no projeto e aplicados na pré-visualização (título da aba e descrição).</p>
             </div>
@@ -1599,7 +1898,28 @@ function App() {
           {layers.filter((layer) => layer.name.toLowerCase().includes(paletteQuery.toLowerCase())).map((layer) => <button key={layer.id} onClick={() => { setSelectedLayerId(layer.id); setActiveSide("layers"); setPaletteOpen(false); setPaletteQuery(""); }}><span>Camada</span>{layer.name}</button>)}
         </div>
       </section></div>}
-      {authOpen && <AuthModal user={authUser} onClose={() => setAuthOpen(false)} onLogin={beginLogin} onLogout={logout} />}
+      <nav className="mobile-nav" aria-label={language === "en" ? "Editor navigation" : "Navegação do editor"}>
+        <button className={mobilePanel === "pages" ? "active" : ""} onClick={() => { setActiveSide("pages"); setMobilePanel("pages"); }}><FileText size={18} /><span>{mobileLabels.pages}</span></button>
+        <button className={mobilePanel === "layers" ? "active" : ""} onClick={() => { setActiveSide("layers"); setMobilePanel("layers"); }}><Layers3 size={18} /><span>{mobileLabels.layers}</span></button>
+        <button className={mobilePanel === "canvas" ? "active" : ""} onClick={() => setMobilePanel("canvas")}><MousePointer2 size={18} /><span>{mobileLabels.canvas}</span></button>
+        <button className={mobilePanel === "inspector" ? "active" : ""} onClick={() => setMobilePanel("inspector")}><Palette size={18} /><span>{mobileLabels.inspector}</span></button>
+        <button className={mobileMoreOpen ? "active" : ""} onClick={() => setMobileMoreOpen(true)}><Menu size={18} /><span>{mobileLabels.more}</span></button>
+      </nav>
+      {mobileMoreOpen && (
+        <MobileMoreSheet
+          title={mobileLabels.more_title}
+          items={moreItems}
+          onClose={() => setMobileMoreOpen(false)}
+          extra={
+            <div className="sheet-settings">
+              <LanguageSelect value={language} onChange={setLanguage} />
+              <label className="accent-picker" title="Cor de destaque do editor"><input type="color" value={accent} onChange={(event) => setAccent(event.target.value)} aria-label="Cor de destaque do editor" /></label>
+            </div>
+          }
+        />
+      )}
+      {dialogs}
+      {authOpen && <AuthModal user={authUser} onClose={() => setAuthOpen(false)} onLogin={() => guardLeave(beginLogin)} onLogout={() => guardLeave(() => void logout())} />}
       {integrationsOpen && <IntegrationsModal integrations={integrations} onClose={() => setIntegrationsOpen(false)} onNotify={notify} />}
       {mcpOpen && <McpModal servers={mcpServers} onClose={() => setMcpOpen(false)} onAdd={addMcpServer} onRemove={(id) => setMcpServers((current) => current.filter((server) => server.id !== id))} />}
       {toast && <div className="toast"><span className="toast-check">✓</span>{toast}</div>}
@@ -1607,20 +1927,145 @@ function App() {
   );
 }
 
-function ProjectsScreen({ user, pages, language, onLanguageChange, onOpenEditor, onNewProject, onLogout }: { user: AuthUser; pages: Page[]; language: Language; onLanguageChange: (language: Language) => void; onOpenEditor: (path?: string) => void; onNewProject: () => void; onLogout: () => void }) {
+const projectsCopy = {
+  pt: { untitled: "Projeto sem nome", local: "Local", cloud: "Nuvem", localBadge: "Salvo neste dispositivo", cloudBadge: "Sincronizado na nuvem", open: "Aberto agora", remove: "Excluir projeto", count: "projetos", cloudOn: "Nuvem conectada", localOnly: "Modo local · sem conta", signIn: "Entrar com Google", signOut: "Sair", empty: "Crie quantos projetos quiser. Eles ficam neste dispositivo e não vão para o banco de dados.", localNote: "Entre com Google para sincronizar 1 projeto na nuvem.", title: "Dê forma às suas ideias.", intro: "Abra um projeto ou comece um novo. Projetos locais não têm limite." },
+  en: { untitled: "Untitled project", local: "Local", cloud: "Cloud", localBadge: "Saved on this device", cloudBadge: "Synced to the cloud", open: "Open now", remove: "Delete project", count: "projects", cloudOn: "Cloud connected", localOnly: "Local mode · no account", signIn: "Sign in with Google", signOut: "Sign out", empty: "Create as many projects as you want. They stay on this device and never reach the database.", localNote: "Sign in with Google to sync 1 project to the cloud.", title: "Shape your ideas.", intro: "Open a project or start a new one. Local projects have no limit." },
+  es: { untitled: "Proyecto sin nombre", local: "Local", cloud: "Nube", localBadge: "Guardado en este dispositivo", cloudBadge: "Sincronizado en la nube", open: "Abierto ahora", remove: "Eliminar proyecto", count: "proyectos", cloudOn: "Nube conectada", localOnly: "Modo local · sin cuenta", signIn: "Entrar con Google", signOut: "Cerrar sesión", empty: "Crea los proyectos que quieras. Se quedan en este dispositivo y no llegan a la base de datos.", localNote: "Entra con Google para sincronizar 1 proyecto en la nube.", title: "Dale forma a tus ideas.", intro: "Abre un proyecto o empieza uno nuevo. Los proyectos locales no tienen límite." },
+};
+
+type ProjectsScreenProps = {
+  user: AuthUser | null;
+  language: Language;
+  onLanguageChange: (language: Language) => void;
+  localProjects: LocalProjectRecord[];
+  cloudMeta: { name: string; updatedAt: string } | null;
+  activeRef: ProjectRef;
+  onOpen: (id: string, storage: "local" | "cloud") => void;
+  onNewProject: () => void;
+  onDelete: (id: string) => void;
+  onLogin: () => void;
+  onLogout: () => void;
+};
+
+function ProjectsScreen({ user, language, onLanguageChange, localProjects, cloudMeta, activeRef, onOpen, onNewProject, onDelete, onLogin, onLogout }: ProjectsScreenProps) {
   const ui = uiCopy[language];
-  const title = language === "pt" ? "Dê forma às suas ideias." : language === "es" ? "Dale forma a tus ideas." : "Shape your ideas.";
-  const intro = language === "pt" ? "Abra um projeto existente ou comece uma nova superfície visual." : language === "es" ? "Abre un proyecto existente o empieza una nueva superficie visual." : "Open an existing project or start a new visual surface.";
-  return <main className="projects-screen"><header className="projects-topbar"><a className="brand-lockup" href={url("/")}><div className="brand-mark"><span>S</span><span>F</span></div><div><div className="brand-name">siteforge<span>.</span></div><div className="brand-tag">{ui.workspace}</div></div></a><div className="projects-actions"><LanguageSelect value={language} onChange={onLanguageChange} /><button className="projects-account" onClick={onLogout}><span>{(user.name || user.email).slice(0, 2).toUpperCase()}</span>{user.name || user.email}<LogOut size={14} /></button></div></header><section className="projects-content"><div className="projects-heading"><div><span className="eyebrow">{ui.projects} / {ui.workspace}</span><h1>{title}</h1><p>{intro}</p></div><button className="publish-button" onClick={onNewProject}><Plus size={15} /> {ui.newProject}</button></div><div className="projects-toolbar"><span><FolderOpen size={14} /> {pages.length} {ui.pages.toLowerCase()}</span><span className="projects-cloud"><span className="live-dot" /> {ui.cloudSync}</span></div><div className="projects-grid"><article className="project-tile featured" onClick={() => onOpenEditor("/editor")}><div className="project-preview project-preview-orb"><span className="project-preview-kicker">SITEFORGE / 01</span><div className="project-preview-orb-shape" /><span className="project-preview-caption">Design<br /><em>in motion.</em></span></div><div className="project-tile-copy"><div><span className="eyebrow">{ui.lastEdited}</span><h2>{language === "pt" ? "Projeto sem nome" : language === "es" ? "Proyecto sin nombre" : "Untitled project"}</h2><p>{ui.visualSystem} · {pages.length} {ui.pages.toLowerCase()}</p></div><button className="project-open" onClick={(event) => { event.stopPropagation(); onOpenEditor("/editor"); }}>{ui.openEditor} <ArrowRight size={14} /></button></div></article><button className="project-new-tile" onClick={onNewProject}><span className="project-new-icon"><Plus size={20} /></span><strong>{ui.newProject}</strong><span>{ui.blankCanvas}</span></button></div></section></main>;
+  const c = projectsCopy[language];
+  const total = localProjects.length + (user && cloudMeta ? 1 : 0);
+  return (
+    <main className="projects-screen">
+      <header className="projects-topbar">
+        <a className="brand-lockup" href={url("/")}><div className="brand-mark"><span>S</span><span>F</span></div><div><div className="brand-name">siteforge<span>.</span></div><div className="brand-tag">{ui.workspace}</div></div></a>
+        <div className="projects-actions">
+          <LanguageSelect value={language} onChange={onLanguageChange} />
+          {user ? (
+            <button className="projects-account" onClick={onLogout}><span>{(user.name || user.email).slice(0, 2).toUpperCase()}</span>{user.name || user.email}<LogOut size={14} /></button>
+          ) : (
+            <button className="projects-account" onClick={onLogin}><LogIn size={14} /><span className="projects-signin-text">{c.signIn}</span></button>
+          )}
+        </div>
+      </header>
+      <section className="projects-content">
+        <div className="projects-heading">
+          <div><span className="eyebrow">{ui.projects} / {ui.workspace}</span><h1>{c.title}</h1><p>{c.intro}</p></div>
+          <button className="publish-button" onClick={onNewProject}><Plus size={15} /> {ui.newProject}</button>
+        </div>
+        <div className="projects-toolbar">
+          <span><FolderOpen size={14} /> {total} {c.count}</span>
+          <span className="projects-cloud"><span className={`live-dot ${user ? "" : "off"}`} /> {user ? c.cloudOn : c.localOnly}</span>
+        </div>
+        <div className="projects-grid">
+          {user && cloudMeta && (
+            <ProjectCard name={cloudMeta.name || c.untitled} updatedAt={cloudMeta.updatedAt} storage="cloud" active={activeRef.storage === "cloud"} language={language} onOpen={() => onOpen("cloud", "cloud")} />
+          )}
+          {localProjects.map((project) => (
+            <ProjectCard key={project.id} name={project.name || c.untitled} updatedAt={project.updatedAt} storage="local" active={activeRef.id === project.id} language={language} onOpen={() => onOpen(project.id, "local")} onDelete={() => onDelete(project.id)} />
+          ))}
+          <button className="project-new-tile" onClick={onNewProject}>
+            <span className="project-new-icon"><Plus size={20} /></span>
+            <strong>{ui.newProject}</strong>
+            <span>{ui.blankCanvas}</span>
+          </button>
+        </div>
+        {!user && <p className="projects-note"><CloudIcon /> {c.localNote}</p>}
+        {localProjects.length === 0 && !cloudMeta && <p className="projects-note">{c.empty}</p>}
+      </section>
+    </main>
+  );
+}
+
+function ProjectCard({ name, updatedAt, storage, active, language, onOpen, onDelete }: { name: string; updatedAt: string; storage: "local" | "cloud"; active: boolean; language: Language; onOpen: () => void; onDelete?: () => void }) {
+  const c = projectsCopy[language];
+  const locale = language === "pt" ? "pt-BR" : language === "es" ? "es-ES" : "en-US";
+  const date = new Date(updatedAt).toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
+  return (
+    <article className={`project-tile ${active ? "active" : ""}`} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter") onOpen(); }}>
+      <div className="project-preview project-preview-orb">
+        <span className="project-preview-kicker">SITEFORGE · {storage === "cloud" ? c.cloud : c.local}</span>
+        <div className="project-preview-orb-shape" />
+        <span className="project-preview-caption">{name}</span>
+      </div>
+      <div className="project-tile-copy">
+        <div>
+          <span className="eyebrow">{active ? c.open : date}</span>
+          <h2>{name}</h2>
+          <p>{storage === "cloud" ? c.cloudBadge : c.localBadge}</p>
+        </div>
+        {onDelete && (
+          <button className="project-delete" aria-label={c.remove} title={c.remove} onClick={(event) => { event.stopPropagation(); onDelete(); }}><Trash2 size={14} /></button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+// Diálogo de confirmação com visual próprio (usado em "salvar alterações?" e exclusão).
+function ConfirmSheet({ tone, icon, eyebrow, title, description, actions, onCancel, cancelLabel }: { tone: "brand" | "danger"; icon: React.ReactNode; eyebrow: string; title: string; description: string; actions: Array<{ label: string; variant: "primary" | "secondary" | "danger"; onClick: () => void }>; onCancel: () => void; cancelLabel: string }) {
+  return (
+    <div className="confirm-backdrop" onMouseDown={onCancel}>
+      <section className={`confirm-card ${tone}`} role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="confirm-icon">{icon}</div>
+        <span className="eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{description}</p>
+        <div className="confirm-actions">
+          {actions.map((action) => (
+            <button key={action.label} className={action.variant} onClick={action.onClick}>{action.label}</button>
+          ))}
+          <button className="ghost" onClick={onCancel}>{cancelLabel}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// Menu "Mais" do editor no celular: reúne as ações da barra superior e do painel esquerdo.
+function MobileMoreSheet({ items, extra, onClose, title }: { items: Array<{ label: string; icon: React.ReactNode; onClick: () => void; disabled?: boolean }>; extra?: React.ReactNode; onClose: () => void; title: string }) {
+  return (
+    <div className="sheet-backdrop" onMouseDown={onClose}>
+      <section className="more-sheet" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="sheet-grab" />
+        <div className="sheet-title">{title}</div>
+        {extra && <div className="sheet-extra">{extra}</div>}
+        <div className="sheet-grid">
+          {items.map((item) => (
+            <button key={item.label} disabled={item.disabled} onClick={() => { onClose(); item.onClick(); }}>
+              <span className="sheet-icon">{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
 }
 
 function AuthLoadingScreen() {
   return <main className="auth-gate"><div className="auth-gate-card loading-card"><div className="brand-mark"><span>S</span><span>F</span></div><span className="eyebrow">Secure workspace</span><h1>Checking your<br /><em>session.</em></h1><p>Estamos preparando seu espaço de criação.</p><span className="auth-spinner" /></div></main>;
 }
 
-function LoginRequiredScreen({ language, onLanguageChange, onLogin }: { language: Language; onLanguageChange: (language: Language) => void; onLogin: () => void }) {
+function LoginRequiredScreen({ language, onLanguageChange, onLogin, onGuest }: { language: Language; onLanguageChange: (language: Language) => void; onLogin: () => void; onGuest: () => void }) {
   const ui = uiCopy[language];
-  return <main className="auth-gate"><div className="auth-language"><LanguageSelect value={language} onChange={onLanguageChange} /></div><div className="auth-gate-card"><a className="auth-back-link" href={url("/")}><ArrowLeft size={14} /> {ui.backToSite}</a><div className="modal-brand"><div className="brand-mark"><span>S</span><span>F</span></div><span>siteforge<span>.</span></span></div><span className="eyebrow">{ui.membersOnly}</span><h1>{ui.buildA}<br /><em>{ui.buildB}</em></h1><p>{ui.loginDescription}</p><div className="security-list"><span><ShieldCheck size={15} /> {language === "pt" ? "Login oficial Google" : language === "es" ? "Inicio oficial Google" : "Official Google login"}</span><span><CloudIcon /> {language === "pt" ? "Edições sincronizadas na nuvem" : language === "es" ? "Ediciones sincronizadas en la nube" : "Edits synced to the cloud"}</span><span><KeyRound size={15} /> {language === "pt" ? "Seu workspace protegido" : language === "es" ? "Tu espacio protegido" : "Your workspace is protected"}</span></div><button className="login-button" onClick={onLogin}><LogIn size={15} /> {ui.continueGoogle} <ArrowRight size={15} /></button><p className="legal-copy">{language === "pt" ? "O editor só fica disponível depois da confirmação da sua sessão." : language === "es" ? "El editor estará disponible después de confirmar tu sesión." : "The editor becomes available after your session is confirmed."}</p></div></main>;
+  return <main className="auth-gate"><div className="auth-language"><LanguageSelect value={language} onChange={onLanguageChange} /></div><div className="auth-gate-card"><a className="auth-back-link" href={url("/")}><ArrowLeft size={14} /> {ui.backToSite}</a><div className="modal-brand"><div className="brand-mark"><span>S</span><span>F</span></div><span>siteforge<span>.</span></span></div><span className="eyebrow">{ui.membersOnly}</span><h1>{ui.buildA}<br /><em>{ui.buildB}</em></h1><p>{ui.loginDescription}</p><div className="security-list"><span><ShieldCheck size={15} /> {language === "pt" ? "Login oficial Google" : language === "es" ? "Inicio oficial Google" : "Official Google login"}</span><span><CloudIcon /> {language === "pt" ? "Edições sincronizadas na nuvem" : language === "es" ? "Ediciones sincronizadas en la nube" : "Edits synced to the cloud"}</span><span><KeyRound size={15} /> {language === "pt" ? "Seu workspace protegido" : language === "es" ? "Tu espacio protegido" : "Your workspace is protected"}</span></div><button className="login-button" onClick={onLogin}><LogIn size={15} /> {ui.continueGoogle} <ArrowRight size={15} /></button><button className="guest-button" onClick={onGuest}>{language === "pt" ? "Usar sem conta (projetos locais)" : language === "es" ? "Usar sin cuenta (proyectos locales)" : "Use without an account (local projects)"}</button><p className="legal-copy">{language === "pt" ? "O editor só fica disponível depois da confirmação da sua sessão." : language === "es" ? "El editor estará disponible después de confirmar tu sesión." : "The editor becomes available after your session is confirmed."}</p></div></main>;
 }
 function AuthModal({ user, onClose, onLogin, onLogout }: { user: AuthUser | null; onClose: () => void; onLogin: () => void; onLogout: () => void }) {
   return <div className="modal-backdrop" onMouseDown={onClose}><section className="modal-card auth-modal" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={onClose}><X size={15} /></button><div className="modal-brand"><div className="brand-mark"><span>S</span><span>F</span></div><span>siteforge<span>.</span></span></div>{user ? <><span className="eyebrow">Account</span><h2 className="modal-title">Good to see you, {user.name || "creator"}.</h2><p className="modal-copy">Sua conta está conectada e seu projeto pode sincronizar com o cloud.</p><div className="account-card"><div className="account-avatar">{(user.name || user.email).slice(0, 2).toUpperCase()}</div><div><strong>{user.name || "Membro Google"}</strong><span>{user.email || "Conta Google"}</span></div></div><div className="modal-actions"><button className="modal-secondary danger" onClick={onLogout}><LogOut size={14} /> Sair</button></div></> : <><span className="eyebrow">Secure access</span><h2 className="modal-title">Your canvas,<br /><em>everywhere.</em></h2><p className="modal-copy">Entre com sua conta Google para sincronizar projetos e publicar experiências.</p><div className="security-list"><span><ShieldCheck size={15} /> OAuth Google seguro</span><span><CloudIcon /> Seus drafts sincronizados no cloud</span><span><KeyRound size={15} /> Workspace protegido</span></div><button className="login-button" onClick={onLogin}><LogIn size={15} /> Continue with Google <ArrowRight size={15} /></button><p className="legal-copy">Ao continuar, você será redirecionado para o provedor Manus.</p></>}</section></div>;

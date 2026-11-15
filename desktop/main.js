@@ -41,6 +41,10 @@ async function checkForUpdates() {
   return { current, latest, available: compareVersions(latest, current) > 0, url: release.html_url };
 }
 
+let mainWindow = null;
+let hasUnsavedChanges = false;
+let allowClose = false;
+
 async function createWindow() {
   const win = new BrowserWindow({
     width: 1360,
@@ -51,6 +55,14 @@ async function createWindow() {
     backgroundColor: "#08090d",
     webPreferences: { preload: path.join(__dirname, "preload.js"), contextIsolation: true, sandbox: true }
   });
+  mainWindow = win;
+  // Com alterações não salvas, o editor mostra o diálogo antes de a janela fechar.
+  win.on("close", (event) => {
+    if (allowClose || !hasUnsavedChanges) return;
+    event.preventDefault();
+    win.webContents.send("app-close-request");
+  });
+  win.on("closed", () => { mainWindow = null; });
   win.loadURL(`http://127.0.0.1:${PORT}/editor`);
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: "deny" }; });
 }
@@ -87,6 +99,11 @@ function buildMenu() {
 }
 
 ipcMain.handle("app-version", () => app.getVersion());
+ipcMain.on("app-dirty", (_event, value) => { hasUnsavedChanges = value === true; });
+ipcMain.on("app-close-confirm", () => {
+  allowClose = true;
+  if (mainWindow) mainWindow.close();
+});
 ipcMain.handle("check-updates", () => checkForUpdates());
 
 app.whenReady().then(async () => {
