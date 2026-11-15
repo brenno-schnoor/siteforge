@@ -246,6 +246,12 @@
   /* Elementos de desktop que não cabem no celular */
   .canvas-topline, .canvas-bottomline, .align-bar, .canvas-hint, .canvas-info { display: none !important; }
   .editor-stage { overflow: hidden; }
+  /* A tela ocupa toda a altura disponível entre a barra superior e a navegação */
+  .artboard-shell { flex: 1; min-height: 0 !important; max-height: none !important; height: auto; }
+  .canvas-wrap { flex: 1; min-height: 0; }
+  /* Nome do projeto visível na barra superior */
+  .project-name-input { color: #eff2ec; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 6px 10px; }
+  .project-name-input::placeholder { color: #7c8290; }
   .canvas-stage, .canvas-wrap { padding: 8px; }
 
   .confirm-backdrop, .sheet-backdrop { place-items: end center; padding: 0; }

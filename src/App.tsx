@@ -844,7 +844,8 @@ function App() {
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
   const [activeInspector, setActiveInspector] = useState<InspectorTab>("design");
   const [activeSide, setActiveSide] = useState<"pages" | "layers">("pages");
-  const [device, setDevice] = useState<Device>("desktop");
+  // Em telas pequenas o editor abre já na pré-visualização de celular.
+  const [device, setDevice] = useState<Device>(() => (typeof window !== "undefined" && window.innerWidth <= 860 ? "mobile" : "desktop"));
   const [routePath, setRoutePath] = useState(() => appPath() || "/editor");
   const [preview, setPreview] = useState(() => appPath() === "/preview");
   const [selectedColor, setSelectedColor] = useState("#b8ff3d");
