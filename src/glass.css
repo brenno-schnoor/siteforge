@@ -1,0 +1,129 @@
+/* Vidro fosco: superfícies translúcidas com desfoque sobre o fundo.
+   Carregado por último para valer sobre os estilos anteriores. */
+
+:root {
+  --glass-fill: rgba(22, 24, 32, 0.46);
+  --glass-fill-strong: rgba(20, 22, 30, 0.62);
+  --glass-edge: rgba(255, 255, 255, 0.11);
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(22px) saturate(150%);
+}
+:root[data-theme="light"] {
+  --glass-fill: rgba(255, 252, 240, 0.52);
+  --glass-fill-strong: rgba(255, 252, 240, 0.7);
+  --glass-edge: rgba(90, 80, 50, 0.14);
+  --glass-shine: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Fundo com manchas de luz para o vidro ter algo para refratar */
+.app-shell {
+  background:
+    radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--lime) 14%, transparent), transparent 30%),
+    radial-gradient(circle at 88% 12%, rgba(114, 124, 255, 0.16), transparent 32%),
+    radial-gradient(circle at 60% 92%, rgba(255, 122, 102, 0.1), transparent 34%),
+    #0a0b10;
+}
+:root[data-theme="light"] .app-shell {
+  background:
+    radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--lime) 22%, transparent), transparent 32%),
+    radial-gradient(circle at 88% 12%, rgba(140, 150, 255, 0.2), transparent 34%),
+    radial-gradient(circle at 60% 92%, rgba(255, 170, 120, 0.2), transparent 36%),
+    #f6f3e8;
+}
+
+/* Barras e painéis do editor */
+.topbar,
+.left-rail,
+.left-sidebar,
+.right-sidebar,
+.stage-toolbar,
+.bottom-dock,
+.mobile-nav,
+.projects-topbar,
+.quick-menu,
+.inspector-heading,
+.panel-heading,
+.segmented-tabs,
+.sidebar-note,
+.toast {
+  background: var(--glass-fill) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shine);
+}
+.topbar,
+.left-rail,
+.left-sidebar,
+.right-sidebar,
+.stage-toolbar,
+.projects-topbar {
+  border-color: var(--glass-edge) !important;
+}
+.editor-stage,
+.canvas-wrap {
+  background: transparent !important;
+}
+.artboard-shell {
+  background: rgba(28, 31, 40, 0.5) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge) !important;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.35), var(--glass-shine);
+}
+:root[data-theme="light"] .artboard-shell { background: rgba(255, 252, 240, 0.55) !important; }
+
+/* Cartões, modais e folhas */
+.project-tile,
+.page-card,
+.layer-row,
+.inspector-section,
+.projects-account,
+.integration-row,
+.mcp-server-row,
+.account-card,
+.more-sheet,
+.confirm-card,
+.modal-card,
+.feature-card,
+.about-values > div {
+  background: var(--glass-fill) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge) !important;
+  box-shadow: var(--glass-shine);
+}
+.confirm-backdrop,
+.sheet-backdrop,
+.modal-backdrop {
+  background: rgba(6, 7, 10, 0.35) !important;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+/* Campos e botões secundários ficam mais leves sobre o vidro */
+.property-field input,
+.property-field select,
+.select-field,
+.project-name-input {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: var(--glass-edge) !important;
+}
+:root[data-theme="light"] .property-field input,
+:root[data-theme="light"] .property-field select,
+:root[data-theme="light"] .select-field,
+:root[data-theme="light"] .project-name-input {
+  background: rgba(255, 255, 255, 0.55) !important;
+  color: #2a2820;
+}
+
+/* Tela de projetos e login */
+.projects-screen,
+.auth-gate { background: transparent; }
+.auth-gate-card { background: var(--glass-fill-strong) !important; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border: 1px solid var(--glass-edge); }
+
+/* Site público */
+.public-header { background: var(--glass-fill) !important; -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar, .left-rail, .mobile-nav { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
